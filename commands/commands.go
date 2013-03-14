@@ -10,6 +10,7 @@ import (
 	"github.com/dotcloud/docker/fs"
 	"github.com/dotcloud/docker/future"
 	"github.com/dotcloud/docker/rcli"
+	"github.com/dotcloud/docker/registry"
 	"io"
 	"io/ioutil"
 	"net/http"
@@ -429,8 +430,10 @@ func (srv *Server) CmdImport(stdin io.ReadCloser, stdout io.Writer, args ...stri
 	var archive io.Reader
 	var resp *http.Response
 
+	api := registry.New("registry.docker.io", "v1", false)
+
 	if err := cmd.Parse(args); err != nil {
-		return nil
+		return err
 	}
 	name := cmd.Arg(0)
 	if name == "" {
@@ -439,21 +442,72 @@ func (srv *Server) CmdImport(stdin io.ReadCloser, stdout io.Writer, args ...stri
 	if *fl_stdin {
 		archive = stdin
 	} else {
-		u, err := url.Parse(name)
-		if err != nil {
+		var user, branch, id string
+		var u *url.URL
+		if n, err := fmt.Sscanf(name, "%s/%s:%s", &user, &branch, &id); err != nil {
 			return err
+		} else if n != 3 {
+			if n, err = fmt.Sscanf(name, "%s/%s", &user, &branch); err != nil {
+				return err
+			} else if n == 2 { // format is "<user>/<name>"
+				// FIXME: It would be smarter / more efficient to only download the images we don't already have.
+				info, err := api.ListImages(user, branch)
+				if err != nil {
+					return err
+				}
+				for _, img := range info {
+					u, err = url.Parse(img.TarballUrl)
+					if err != nil {
+						return err
+					}
+					fmt.Fprintf(stdout, "Downloading from %s\n", u.String())
+					// Download with curl (pretty progress bar)
+					// If curl is not available, fallback to http.Get()
+					resp, err = future.Download(u.String(), stdout)
+					if err != nil {
+						return err
+					}
+					archive = future.ProgressReader(resp.Body, int(resp.ContentLength), stdout)
+					fmt.Fprintf(stdout, "Unpacking to %s\n", name)
+					image, err := srv.images.Create(archive, nil, name, "")
+					if err != nil {
+						return err
+					}
+					fmt.Fprintln(stdout, image.Id)
+				}
+				return nil
+			}
+		} else { // n == 3, format is "<user>/<name>:<id>"
+			info, err := api.ImageInfo(user, branch, id)
+			if err != nil {
+				return err
+			}
+
+			u, err = url.Parse(info.TarballUrl)
+			if err != nil {
+				return err
+			}
 		}
-		if u.Scheme == "" {
-			u.Scheme = "http"
+
+		// if format is neither of the two, try for a pure URL.
+		if u == nil {
+			u, err := url.Parse(name)
+			if err != nil {
+				return err
+			}
+			if u.Scheme == "" {
+				u.Scheme = "http"
+			}
+			if u.Host == "" {
+				u.Host = "get.docker.io"
+				u.Path = path.Join("/images", u.Path)
+			}
 		}
-		if u.Host == "" {
-			u.Host = "get.docker.io"
-			u.Path = path.Join("/images", u.Path)
-		}
+
 		fmt.Fprintf(stdout, "Downloading from %s\n", u.String())
 		// Download with curl (pretty progress bar)
 		// If curl is not available, fallback to http.Get()
-		resp, err = future.Download(u.String(), stdout)
+		resp, err := future.Download(u.String(), stdout)
 		if err != nil {
 			return err
 		}
