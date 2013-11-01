@@ -36,6 +36,8 @@ DEFAULT_BUNDLES=(
 	binary
 	test
 	ubuntu
+        tarball
+        ec2
 )
 
 VERSION=$(cat ./VERSION)

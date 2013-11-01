@@ -47,7 +47,7 @@ function build_image {
     qemu-img create -f raw $RELEASE_FILE ${NEW_SIZE}M
     # partition
     LOOP_DEV=/dev/loop7
-    losetup $LOOP_DEV $RELEASE_FILE
+    losetup $LOOP_DEV $RELEASE_FILE || echo "Error setting up loop device" ; exit 1
     parted --script $LOOP_DEV mklabel msdos
     parted --script $LOOP_DEV mkpart primary ext3 0 $NEW_SIZE
     parted --script $LOOP_DEV set 1 boot on
@@ -57,6 +57,11 @@ function build_image {
     TMP_MNT='/tmp/build_root'
     mkdir -p $TMP_MNT
     mount ${LOOP_DEV}p1 $TMP_MNT
+    # check for mount
+    if [ -z "`mount -a | grep $LOOP_DEV`" ] ; then
+        echo "Error: unable to detect loop mount.  Check 'losetup $LOOP_DEV $RELEASE_FILE'"
+        exit 1
+    fi
     rsync -a $BUILD_DIR/ $TMP_MNT/
     # bind mounts
     mount -o bind /dev $TMP_MNT/dev
