@@ -1,0 +1,62 @@
+#!/bin/sh
+
+DEST=$1
+TMP_CHROOT="/var/tmp/chroot"
+
+if go build -o $DEST/docker-$VERSION -ldflags "$LDFLAGS" ./docker; then
+	echo "Created binary: $DEST/docker-$VERSION"
+fi
+
+function base_os {
+    TMP_EC2DEBIAN=/var/tmp/ec2debian
+    debootstrap --verbose --arch amd64 --variant=minbase --components="main,universe,multiverse" --include="linux-image,grub,aufs-tools,locales,dhcpcd,lxc,git-core,openssh-server,less,curl,file,resolvconf" precise $TMP_CHROOT http://us.archive.ubuntu.com/ubuntu
+    git clone https://github.com/tomheady/ec2debian $TMP_EC2DEBIAN
+    cp -rf $TMP_EC2DEBIAN/src/root/etc/{fstab,hosts,rc.local} $TMP_CHROOT/etc/
+    cp -rf $TMP_EC2DEBIAN/src/root/etc/apt/sources.list $TMP_CHROOT/etc/apt/
+    cp -rf $TMP_EC2DEBIAN/src/root/etc/network/interfaces $TMP_CHROOT/etc/network/
+    cp -rf $TMP_EC2DEBIAN/src/root/usr/local/bin/* $TMP_CHROOT/usr/local/bin/
+    cp -rf $TMP_EC2DEBIAN/src/root/etc/ssh/sshd_config $TMP_CHROOT/root/
+    cp -rf $TMP_EC2DEBIAN/src/root/etc/grub.d/40_custom $TMP_CHROOT/root/
+    mount --bind /proc $TMP_CHROOT/proc
+    mount --bind /sys $TMP_CHROOT/sys
+    mount --bind /dev/pts $TMP_CHROOT/dev/pts
+
+    echo en_US.UTF-8 UTF-8 > $TMP_CHROOT/etc/locale.gen
+    DEBIAN_FRONTEND=noninteractive chroot $TMP_CHROOT dpkg-reconfigure --priority=critical locales
+    DEBIAN_FRONTEND=noninteractive chroot $TMP_CHROOT apt-get -y dist-upgrade
+    chroot $TMP_CHROOT ln -s /boot/grub/grub.cfg /boot/grub/menu.lst
+    chroot $TMP_CHROOT mv /root/40_custom /etc/grub.d/
+    echo "y\n" | chroot $TMP_CHROOT update-grub
+    chroot $TMP_CHROOT mv /root/sshd_config /etc/ssh/
+    chroot $TMP_CHROOT update-rc.d -f hwclock.sh remove
+    chroot $TMP_CHROOT update-rc.d -f hwclockfirst.sh remove
+    apt-get autoremove --purge
+    apt-get clean
+    apt-get autoclean
+    chroot $TMP_CHROOT rm -f /root/.ssh/authorized_keys /etc/hostname
+    chroot $TMP_CHROOT rm -rf /var/log/*.gz /var/log/{bootstrap,dpkg}.log /var/cache/apt/*.bin /var/lib/apt/lists
+    chroot $TMP_CHROOT rm -rf /tmp/*
+    chroot $TMP_CHROOT mkdir -p /var/lib/apt/lists/partial
+    # Copy the binary
+    cp $DEST/../binary/docker-$VERSION $TMP_CHROOT/usr/bin/docker
+    umount $TMP_CHROOT/proc
+    umount $TMP_CHROOT/sys
+    umount $TMP_CHROOT/dev/pts
+}
+
+function build_tarball {
+    if [ ! -e "$TMP_CHROOT" ] ; then
+        echo "Error finding chroot.  Please check for previous errors."
+        exit 1
+    fi
+    pushd $TMP_CHROOT > /dev/null
+    tar cvf $DEST/docker-$VERSION-rootfs.tar .
+    popd
+}
+
+function build {
+    base_os
+    build_tarball
+}
+
+build
