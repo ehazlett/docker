@@ -30,7 +30,7 @@ To list available commands, either run ``docker`` with no parameters or execute
     Attach to a running container.
 
       -nostdin=false: Do not attach stdin
-      -sig-proxy=false: Proxify all received signal to the process (even in non-tty mode)
+      -sig-proxy=true: Proxify all received signal to the process (even in non-tty mode)
 
 You can detach from the container again (and leave it running) with
 ``CTRL-c`` (for a quiet exit) or ``CTRL-\`` to get a stacktrace of
@@ -41,7 +41,7 @@ To stop a container, use ``docker stop``
 To kill the container, use ``docker kill``
 
 .. _cli_attach_examples:
- 
+
 Examples:
 ~~~~~~~~~
 
@@ -55,8 +55,8 @@ Examples:
      Mem:    373572k total,   355560k used,    18012k free,    27872k buffers
      Swap:   786428k total,        0k used,   786428k free,   221740k cached
 
-     PID USER      PR  NI  VIRT  RES  SHR S %CPU %MEM    TIME+  COMMAND            
-      1 root      20   0 17200 1116  912 R    0  0.3   0:00.03 top                
+     PID USER      PR  NI  VIRT  RES  SHR S %CPU %MEM    TIME+  COMMAND
+      1 root      20   0 17200 1116  912 R    0  0.3   0:00.03 top
 
       top - 02:05:55 up  3:05,  0 users,  load average: 0.01, 0.02, 0.05
       Tasks:   1 total,   1 running,   0 sleeping,   0 stopped,   0 zombie
@@ -64,8 +64,8 @@ Examples:
       Mem:    373572k total,   355244k used,    18328k free,    27872k buffers
       Swap:   786428k total,        0k used,   786428k free,   221776k cached
 
-        PID USER      PR  NI  VIRT  RES  SHR S %CPU %MEM    TIME+  COMMAND            
-	    1 root      20   0 17208 1144  932 R    0  0.3   0:00.03 top                
+        PID USER      PR  NI  VIRT  RES  SHR S %CPU %MEM    TIME+  COMMAND
+	    1 root      20   0 17208 1144  932 R    0  0.3   0:00.03 top
 
 
       top - 02:05:58 up  3:06,  0 users,  load average: 0.01, 0.02, 0.05
@@ -74,9 +74,9 @@ Examples:
       Mem:    373572k total,   355780k used,    17792k free,    27880k buffers
       Swap:   786428k total,        0k used,   786428k free,   221776k cached
 
-      PID USER      PR  NI  VIRT  RES  SHR S %CPU %MEM    TIME+  COMMAND            
-           1 root      20   0 17208 1144  932 R    0  0.3   0:00.03 top                
-     ^C$ 
+      PID USER      PR  NI  VIRT  RES  SHR S %CPU %MEM    TIME+  COMMAND
+           1 root      20   0 17208 1144  932 R    0  0.3   0:00.03 top
+     ^C$
      $ sudo docker stop $ID
 
 .. _cli_build:
@@ -96,8 +96,8 @@ Examples:
 
 .. _cli_build_examples:
 
-Examples
-~~~~~~~~
+Examples:
+~~~~~~~~~
 
 .. code-block:: bash
 
@@ -157,7 +157,7 @@ by using the ``git://`` schema.
 
       -m="": Commit message
       -author="": Author (eg. "John Hannibal Smith <hannibal@a-team.com>"
-      -run="": Configuration to be applied when the image is launched with `docker run`. 
+      -run="": Configuration to be applied when the image is launched with `docker run`.
                (ex: '{"Cmd": ["cat", "/world"], "PortSpecs": ["22"]}')
 
 Full -run example (multiline is ok within a single quote ``'``)
@@ -239,7 +239,7 @@ Shell 1: Listening for events
 .............................
 
 .. code-block:: bash
-    
+
     $ sudo docker events
 
 Shell 2: Start and Stop a Container
@@ -281,6 +281,9 @@ Shell 1: (Again .. now showing events)
     Usage: docker history [OPTIONS] IMAGE
 
     Show the history of an image
+
+      -notrunc=false: Don't truncate output
+      -q=false: only show numeric IDs
 
 .. _cli_images:
 
@@ -401,7 +404,9 @@ Insert file from github
 
     Usage: docker kill CONTAINER [CONTAINER...]
 
-    Kill a running container
+    Kill a running container (Send SIGKILL)
+
+The main process inside the container will be sent SIGKILL.
 
 .. _cli_login:
 
@@ -429,7 +434,6 @@ Insert file from github
 
 ``logs``
 --------
-
 
 ::
 
@@ -510,6 +514,29 @@ Insert file from github
     Usage: docker rm [OPTIONS] CONTAINER
 
     Remove one or more containers
+        -link="": Remove the link instead of the actual container
+
+
+Examples:
+~~~~~~~~~
+
+.. code-block:: bash
+
+    $ docker rm /redis
+    /redis
+
+
+This will remove the container referenced under the link ``/redis``.
+
+
+.. code-block:: bash
+
+    $ docker rm -link /webapp/redis
+    /webapp/redis
+
+
+This will remove the underlying link between ``/webapp`` and the ``/redis`` containers removing all
+network communication.
 
 .. _cli_rmi:
 
@@ -533,7 +560,7 @@ Insert file from github
 
     Run a command in a new container
 
-      -a=map[]: Attach to stdin, stdout or stderr.
+      -a=map[]: Attach to stdin, stdout or stderr
       -c=0: CPU shares (relative weight)
       -cidfile="": Write the container ID to the file
       -d=false: Detached mode: Run container in the background, print new container id
@@ -549,14 +576,18 @@ Insert file from github
       -u="": Username or UID
       -dns=[]: Set custom dns servers for the container
       -v=[]: Create a bind mount with: [host-dir]:[container-dir]:[rw|ro]. If "container-dir" is missing, then docker creates a new volume.
-      -volumes-from="": Mount all volumes from the given container.
-      -entrypoint="": Overwrite the default entrypoint set by the image.
+      -volumes-from="": Mount all volumes from the given container
+      -entrypoint="": Overwrite the default entrypoint set by the image
       -w="": Working directory inside the container
       -lxc-conf=[]: Add custom lxc options -lxc-conf="lxc.cgroup.cpuset.cpus = 0,1"
-      -sig-proxy=false: Proxify all received signal to the process (even in non-tty mode)
+      -sig-proxy=true: Proxify all received signal to the process (even in non-tty mode)
+      -expose=[]: Expose a port from the container without publishing it to your host
+      -link="": Add link to another container (name:alias)
+      -name="": Assign the specified name to the container. If no name is specific docker will generate a random name
+      -P=false: Publish all exposed ports to the host interfaces
 
 Examples
-~~~~~~~~
+--------
 
 .. code-block:: bash
 
@@ -590,19 +621,52 @@ use-cases, like running Docker within Docker.
 
    docker  run -w /path/to/dir/ -i -t  ubuntu pwd
 
-The ``-w`` lets the command being executed inside directory given, 
-here /path/to/dir/. If the path does not exists it is created inside the 
+The ``-w`` lets the command being executed inside directory given,
+here /path/to/dir/. If the path does not exists it is created inside the
 container.
 
 .. code-block:: bash
 
    docker  run  -v `pwd`:`pwd` -w `pwd` -i -t  ubuntu pwd
 
-The ``-v`` flag mounts the current working directory into the container. 
-The ``-w`` lets the command being executed inside the current 
+The ``-v`` flag mounts the current working directory into the container.
+The ``-w`` lets the command being executed inside the current
 working directory, by changing into the directory to the value
 returned by ``pwd``. So this combination executes the command
 using the container, but inside the current working directory.
+
+.. code-block:: bash
+
+    docker run -p 127.0.0.1:80:8080 ubuntu bash
+
+This binds port ``8080`` of the container to port ``80`` on 127.0.0.1 of the
+host machine. :ref:`port_redirection` explains in detail how to manipulate ports
+in Docker.
+
+.. code-block:: bash
+
+    docker run -expose 80 ubuntu bash
+
+This exposes port ``80`` of the container for use within a link without
+publishing the port to the host system's interfaces. :ref:`port_redirection`
+explains in detail how to manipulate ports in Docker.
+
+.. code-block:: bash
+
+    docker run -name console -t -i ubuntu bash
+
+This will create and run a new container with the container name
+being ``console``.
+
+.. code-block:: bash
+
+    docker run -link /redis:redis -name console ubuntu bash
+
+The ``-link`` flag will link the container named ``/redis`` into the
+newly created container with the alias ``redis``.  The new container
+can access the network and environment of the redis container via
+environment variables.  The ``-name`` flag will assign the name ``console``
+to the newly created container.
 
 .. _cli_search:
 
@@ -639,9 +703,11 @@ using the container, but inside the current working directory.
 
     Usage: docker stop [OPTIONS] CONTAINER [CONTAINER...]
 
-    Stop a running container
+    Stop a running container (Send SIGTERM, and then SIGKILL after grace period)
 
       -t=10: Number of seconds to wait for the container to stop before killing it.
+
+The main process inside the container will receive SIGTERM, and after a grace period, SIGKILL
 
 .. _cli_tag:
 
@@ -663,7 +729,7 @@ using the container, but inside the current working directory.
 
 ::
 
-    Usage: docker top CONTAINER
+    Usage: docker top CONTAINER [ps OPTIONS]
 
     Lookup the running processes of a container
 
@@ -685,6 +751,3 @@ Show the version of the docker client, daemon, and latest released version.
     Usage: docker wait [OPTIONS] NAME
 
     Block until a container stops, then print its exit code.
-
-
-
