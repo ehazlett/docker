@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"github.com/dotcloud/docker/archive"
 	"github.com/dotcloud/docker/auth"
 	"github.com/dotcloud/docker/utils"
 	"github.com/gorilla/mux"
@@ -72,12 +73,12 @@ func httpError(w http.ResponseWriter, err error) {
 		statusCode = http.StatusUnauthorized
 	} else if strings.Contains(err.Error(), "hasn't been activated") {
 		statusCode = http.StatusForbidden
-	}	
-	
+	}
+
 	if err != nil {
 		utils.Errorf("HTTP Error: statusCode=%d %s", statusCode, err.Error())
-		http.Error(w, err.Error(), statusCode)		
-	}	
+		http.Error(w, err.Error(), statusCode)
+	}
 }
 
 func writeJSON(w http.ResponseWriter, code int, v interface{}) error {
@@ -154,7 +155,6 @@ func postContainersKill(srv *Server, version float64, w http.ResponseWriter, r *
 			}
 		}
 	}
-
 	if err := srv.ContainerKill(name, signal); err != nil {
 		return err
 	}
@@ -522,8 +522,12 @@ func postImagesPush(srv *Server, version float64, w http.ResponseWriter, r *http
 }
 
 func postContainersCreate(srv *Server, version float64, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := parseForm(r); err != nil {
+		return nil
+	}
 	config := &Config{}
 	out := &APIRun{}
+	name := r.Form.Get("name")
 
 	if err := json.NewDecoder(r.Body).Decode(config); err != nil {
 		return err
@@ -534,16 +538,19 @@ func postContainersCreate(srv *Server, version float64, w http.ResponseWriter, r
 		return err
 	}
 
-	if !config.NetworkDisabled && len(config.Dns) == 0 && len(srv.runtime.Dns) == 0 && utils.CheckLocalDns(resolvConf) {
+	if !config.NetworkDisabled && len(config.Dns) == 0 && len(srv.runtime.config.Dns) == 0 && utils.CheckLocalDns(resolvConf) {
 		out.Warnings = append(out.Warnings, fmt.Sprintf("Docker detected local DNS server on resolv.conf. Using default external servers: %v", defaultDns))
 		config.Dns = defaultDns
 	}
 
-	id, err := srv.ContainerCreate(config)
+	id, warnings, err := srv.ContainerCreate(config, name)
 	if err != nil {
 		return err
 	}
 	out.ID = id
+	for _, warning := range warnings {
+		out.Warnings = append(out.Warnings, warning)
+	}
 
 	if config.Memory > 0 && !srv.runtime.capabilities.MemoryLimit {
 		log.Println("WARNING: Your kernel does not support memory limit capabilities. Limitation discarded.")
@@ -589,12 +596,17 @@ func deleteContainers(srv *Server, version float64, w http.ResponseWriter, r *ht
 		return fmt.Errorf("Missing parameter")
 	}
 	name := vars["name"]
+
 	removeVolume, err := getBoolParam(r.Form.Get("v"))
 	if err != nil {
 		return err
 	}
+	removeLink, err := getBoolParam(r.Form.Get("link"))
+	if err != nil {
+		return err
+	}
 
-	if err := srv.ContainerDestroy(name, removeVolume); err != nil {
+	if err := srv.ContainerDestroy(name, removeVolume, removeLink); err != nil {
 		return err
 	}
 	w.WriteHeader(http.StatusNoContent)
@@ -641,6 +653,10 @@ func postContainersStart(srv *Server, version float64, w http.ResponseWriter, r 
 		return fmt.Errorf("Missing parameter")
 	}
 	name := vars["name"]
+	// Register any links from the host config before starting the container
+	if err := srv.RegisterLinks(name, hostConfig); err != nil {
+		return err
+	}
 	if err := srv.ContainerStart(name, hostConfig); err != nil {
 		return err
 	}
@@ -674,6 +690,7 @@ func postContainersWait(srv *Server, version float64, w http.ResponseWriter, r *
 		return fmt.Errorf("Missing parameter")
 	}
 	name := vars["name"]
+
 	status, err := srv.ContainerWait(name)
 	if err != nil {
 		return err
@@ -889,7 +906,7 @@ func postBuild(srv *Server, version float64, w http.ResponseWriter, r *http.Requ
 			return fmt.Errorf("Error trying to use git: %s (%s)", err, output)
 		}
 
-		c, err := Tar(root, Bzip2)
+		c, err := archive.Tar(root, archive.Bzip2)
 		if err != nil {
 			return err
 		}
@@ -994,7 +1011,7 @@ func makeHttpHandler(srv *Server, logging bool, localMethod string, localRoute s
 		if err != nil {
 			version = APIVERSION
 		}
-		if srv.enableCors {
+		if srv.runtime.config.EnableCors {
 			writeCorsHeaders(w, r)
 		}
 

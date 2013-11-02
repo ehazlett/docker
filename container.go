@@ -6,6 +6,7 @@ import (
 	"errors"
 	"flag"
 	"fmt"
+	"github.com/dotcloud/docker/archive"
 	"github.com/dotcloud/docker/term"
 	"github.com/dotcloud/docker/utils"
 	"github.com/kr/pty"
@@ -44,6 +45,7 @@ type Container struct {
 	ResolvConfPath string
 	HostnamePath   string
 	HostsPath      string
+	Name           string
 
 	cmd       *exec.Cmd
 	stdout    *utils.WriteBroadcaster
@@ -58,9 +60,15 @@ type Container struct {
 	Volumes  map[string]string
 	// Store rw/ro in a separate structure to preserve reverse-compatibility on-disk.
 	// Easier than migrating older container configs :)
-	VolumesRW map[string]bool
+	VolumesRW  map[string]bool
+	hostConfig *HostConfig
+
+	activeLinks map[string]*Link
 }
 
+// Note: the Config structure should hold only portable information about the container.
+// Here, "portable" means "independent from the host we are running on".
+// Non-portable information *should* appear in HostConfig.
 type Config struct {
 	Hostname        string
 	Domainname      string
@@ -71,7 +79,8 @@ type Config struct {
 	AttachStdin     bool
 	AttachStdout    bool
 	AttachStderr    bool
-	PortSpecs       []string
+	PortSpecs       []string // Deprecated - Can be in the format of 8080/tcp
+	ExposedPorts    map[Port]struct{}
 	Tty             bool // Attach standard streams to a tty, including stdin if it is not closed.
 	OpenStdin       bool // Open stdin
 	StdinOnce       bool // If true, close stdin after the 1 attached client disconnects.
@@ -84,13 +93,16 @@ type Config struct {
 	WorkingDir      string
 	Entrypoint      []string
 	NetworkDisabled bool
-	Privileged      bool
 }
 
 type HostConfig struct {
 	Binds           []string
 	ContainerIDFile string
 	LxcConf         []KeyValuePair
+	Privileged      bool
+	PortBindings    map[Port][]PortBinding
+	Links           []string
+	PublishAllPorts bool
 }
 
 type BindMap struct {
@@ -103,7 +115,6 @@ var (
 	ErrContainerStart           = errors.New("The container failed to start. Unkown error")
 	ErrContainerStartTimeout    = errors.New("The container failed to start due to timed out.")
 	ErrInvalidWorikingDirectory = errors.New("The working directory is invalid. It needs to be an absolute path.")
-	ErrConflictTtySigProxy      = errors.New("TTY mode (-t) already imply signal proxying (-sig-proxy)")
 	ErrConflictAttachDetach     = errors.New("Conflicting options: -a and -d")
 	ErrConflictDetachAutoRemove = errors.New("Conflicting options: -rm and -d")
 )
@@ -111,6 +122,34 @@ var (
 type KeyValuePair struct {
 	Key   string
 	Value string
+}
+
+type PortBinding struct {
+	HostIp   string
+	HostPort string
+}
+
+// 80/tcp
+type Port string
+
+func (p Port) Proto() string {
+	return strings.Split(string(p), "/")[1]
+}
+
+func (p Port) Port() string {
+	return strings.Split(string(p), "/")[0]
+}
+
+func (p Port) Int() int {
+	i, err := parsePort(p.Port())
+	if err != nil {
+		panic(err)
+	}
+	return i
+}
+
+func NewPort(proto, port string) Port {
+	return Port(fmt.Sprintf("%s/%s", port, proto))
 }
 
 func ParseRun(args []string, capabilities *Capabilities) (*Config, *HostConfig, *flag.FlagSet, error) {
@@ -133,7 +172,9 @@ func ParseRun(args []string, capabilities *Capabilities) (*Config, *HostConfig, 
 	flNetwork := cmd.Bool("n", true, "Enable networking for this container")
 	flPrivileged := cmd.Bool("privileged", false, "Give extended privileges to this container")
 	flAutoRemove := cmd.Bool("rm", false, "Automatically remove the container when it exits (incompatible with -d)")
-	flSigProxy := cmd.Bool("sig-proxy", false, "Proxify all received signal to the process (even in non-tty mode)")
+	cmd.Bool("sig-proxy", true, "Proxify all received signal to the process (even in non-tty mode)")
+	cmd.String("name", "", "Assign a name to the container")
+	flPublishAll := cmd.Bool("P", false, "Publish all exposed ports to the host interfaces")
 
 	if capabilities != nil && *flMemory > 0 && !capabilities.MemoryLimit {
 		//fmt.Fprintf(stdout, "WARNING: Your kernel does not support memory limit capabilities. Limitation discarded.\n")
@@ -142,25 +183,31 @@ func ParseRun(args []string, capabilities *Capabilities) (*Config, *HostConfig, 
 
 	flCpuShares := cmd.Int64("c", 0, "CPU shares (relative weight)")
 
-	var flPorts ListOpts
-	cmd.Var(&flPorts, "p", "Expose a container's port to the host (use 'docker port' to see the actual mapping)")
+	var flPublish utils.ListOpts
+	cmd.Var(&flPublish, "p", "Publish a container's port to the host (use 'docker port' to see the actual mapping)")
 
-	var flEnv ListOpts
+	var flExpose utils.ListOpts
+	cmd.Var(&flExpose, "expose", "Expose a port from the container without publishing it to your host")
+
+	var flEnv utils.ListOpts
 	cmd.Var(&flEnv, "e", "Set environment variables")
 
-	var flDns ListOpts
+	var flDns utils.ListOpts
 	cmd.Var(&flDns, "dns", "Set custom dns servers")
 
 	flVolumes := NewPathOpts()
 	cmd.Var(flVolumes, "v", "Bind mount a volume (e.g. from the host: -v /host:/container, from docker: -v /container)")
 
-	var flVolumesFrom ListOpts
+	var flVolumesFrom utils.ListOpts
 	cmd.Var(&flVolumesFrom, "volumes-from", "Mount volumes from the specified container")
 
 	flEntrypoint := cmd.String("entrypoint", "", "Overwrite the default entrypoint of the image")
 
-	var flLxcOpts ListOpts
+	var flLxcOpts utils.ListOpts
 	cmd.Var(&flLxcOpts, "lxc-conf", "Add custom lxc options -lxc-conf=\"lxc.cgroup.cpuset.cpus = 0,1\"")
+
+	var flLinks utils.ListOpts
+	cmd.Var(&flLinks, "link", "Add link to another container (name:alias)")
 
 	if err := cmd.Parse(args); err != nil {
 		return nil, nil, cmd, err
@@ -170,9 +217,6 @@ func ParseRun(args []string, capabilities *Capabilities) (*Config, *HostConfig, 
 	}
 	if *flWorkingDir != "" && !path.IsAbs(*flWorkingDir) {
 		return nil, nil, cmd, ErrInvalidWorikingDirectory
-	}
-	if *flTty && *flSigProxy {
-		return nil, nil, cmd, ErrConflictTtySigProxy
 	}
 	if *flDetach && *flAutoRemove {
 		return nil, nil, cmd, ErrConflictDetachAutoRemove
@@ -186,6 +230,18 @@ func ParseRun(args []string, capabilities *Capabilities) (*Config, *HostConfig, 
 			if *flStdin {
 				flAttach.Set("stdin")
 			}
+		}
+	}
+
+	envs := []string{}
+
+	for _, env := range flEnv {
+		arr := strings.Split(env, "=")
+		if len(arr) > 1 {
+			envs = append(envs, env)
+		} else {
+			v := os.Getenv(env)
+			envs = append(envs, env+"="+v)
 		}
 	}
 
@@ -230,10 +286,28 @@ func ParseRun(args []string, capabilities *Capabilities) (*Config, *HostConfig, 
 		hostname = parts[0]
 		domainname = parts[1]
 	}
+
+	ports, portBindings, err := parsePortSpecs(flPublish)
+	if err != nil {
+		return nil, nil, cmd, err
+	}
+
+	// Merge in exposed ports to the map of published ports
+	for _, e := range flExpose {
+		if strings.Contains(e, ":") {
+			return nil, nil, cmd, fmt.Errorf("Invalid port format for -expose: %s", e)
+		}
+		p := NewPort(splitProtoPort(e))
+		if _, exists := ports[p]; !exists {
+			ports[p] = struct{}{}
+		}
+	}
+
 	config := &Config{
-		Hostname:        hostname,
+		Hostname:        *flHostname,
 		Domainname:      domainname,
-		PortSpecs:       flPorts,
+		PortSpecs:       nil, // Deprecated
+		ExposedPorts:    ports,
 		User:            *flUser,
 		Tty:             *flTty,
 		NetworkDisabled: !*flNetwork,
@@ -243,20 +317,24 @@ func ParseRun(args []string, capabilities *Capabilities) (*Config, *HostConfig, 
 		AttachStdin:     flAttach.Get("stdin"),
 		AttachStdout:    flAttach.Get("stdout"),
 		AttachStderr:    flAttach.Get("stderr"),
-		Env:             flEnv,
+		Env:             envs,
 		Cmd:             runCmd,
 		Dns:             flDns,
 		Image:           image,
 		Volumes:         flVolumes,
 		VolumesFrom:     strings.Join(flVolumesFrom, ","),
 		Entrypoint:      entrypoint,
-		Privileged:      *flPrivileged,
 		WorkingDir:      *flWorkingDir,
 	}
+
 	hostConfig := &HostConfig{
 		Binds:           binds,
 		ContainerIDFile: *flContainerIDFile,
 		LxcConf:         lxcConf,
+		Privileged:      *flPrivileged,
+		PortBindings:    portBindings,
+		Links:           flLinks,
+		PublishAllPorts: *flPublishAll,
 	}
 
 	if capabilities != nil && *flMemory > 0 && !capabilities.SwapLimit {
@@ -271,36 +349,38 @@ func ParseRun(args []string, capabilities *Capabilities) (*Config, *HostConfig, 
 	return config, hostConfig, cmd, nil
 }
 
-type PortMapping map[string]string
+type PortMapping map[string]string // Deprecated
 
 type NetworkSettings struct {
 	IPAddress   string
 	IPPrefixLen int
 	Gateway     string
 	Bridge      string
-	PortMapping map[string]PortMapping
+	PortMapping map[string]PortMapping // Deprecated
+	Ports       map[Port][]PortBinding
 }
 
-// returns a more easy to process description of the port mapping defined in the settings
 func (settings *NetworkSettings) PortMappingAPI() []APIPort {
 	var mapping []APIPort
-	for private, public := range settings.PortMapping["Tcp"] {
-		pubint, _ := strconv.ParseInt(public, 0, 0)
-		privint, _ := strconv.ParseInt(private, 0, 0)
-		mapping = append(mapping, APIPort{
-			PrivatePort: privint,
-			PublicPort:  pubint,
-			Type:        "tcp",
-		})
-	}
-	for private, public := range settings.PortMapping["Udp"] {
-		pubint, _ := strconv.ParseInt(public, 0, 0)
-		privint, _ := strconv.ParseInt(private, 0, 0)
-		mapping = append(mapping, APIPort{
-			PrivatePort: privint,
-			PublicPort:  pubint,
-			Type:        "udp",
-		})
+	for port, bindings := range settings.Ports {
+		p, _ := parsePort(port.Port())
+		if len(bindings) == 0 {
+			mapping = append(mapping, APIPort{
+				PublicPort: int64(p),
+				Type:       port.Proto(),
+			})
+			continue
+		}
+		for _, binding := range bindings {
+			p, _ := parsePort(port.Port())
+			h, _ := parsePort(binding.HostPort)
+			mapping = append(mapping, APIPort{
+				PrivatePort: int64(p),
+				PublicPort:  int64(h),
+				Type:        port.Proto(),
+				IP:          binding.HostIp,
+			})
+		}
 	}
 	return mapping
 }
@@ -340,7 +420,7 @@ func (container *Container) FromDisk() error {
 	if err := json.Unmarshal(data, container); err != nil && !strings.Contains(err.Error(), "docker.PortMapping") {
 		return err
 	}
-	return nil
+	return container.readHostConfig()
 }
 
 func (container *Container) ToDisk() (err error) {
@@ -348,44 +428,53 @@ func (container *Container) ToDisk() (err error) {
 	if err != nil {
 		return
 	}
-	return ioutil.WriteFile(container.jsonPath(), data, 0666)
+	err = ioutil.WriteFile(container.jsonPath(), data, 0666)
+	if err != nil {
+		return
+	}
+	return container.writeHostConfig()
 }
 
-func (container *Container) ReadHostConfig() (*HostConfig, error) {
+func (container *Container) readHostConfig() error {
+	container.hostConfig = &HostConfig{}
+	// If the hostconfig file does not exist, do not read it.
+	// (We still have to initialize container.hostConfig,
+	// but that's OK, since we just did that above.)
+	_, err := os.Stat(container.hostConfigPath())
+	if os.IsNotExist(err) {
+		return nil
+	}
 	data, err := ioutil.ReadFile(container.hostConfigPath())
 	if err != nil {
-		return &HostConfig{}, err
+		return err
 	}
-	hostConfig := &HostConfig{}
-	if err := json.Unmarshal(data, hostConfig); err != nil {
-		return &HostConfig{}, err
-	}
-	return hostConfig, nil
+	return json.Unmarshal(data, container.hostConfig)
 }
 
-func (container *Container) SaveHostConfig(hostConfig *HostConfig) (err error) {
-	data, err := json.Marshal(hostConfig)
+func (container *Container) writeHostConfig() (err error) {
+	data, err := json.Marshal(container.hostConfig)
 	if err != nil {
 		return
 	}
 	return ioutil.WriteFile(container.hostConfigPath(), data, 0666)
 }
 
-func (container *Container) generateLXCConfig(hostConfig *HostConfig) error {
+func (container *Container) generateEnvConfig(env []string) error {
+	data, err := json.Marshal(env)
+	if err != nil {
+		return err
+	}
+	ioutil.WriteFile(container.EnvConfigPath(), data, 0600)
+	return nil
+}
+
+func (container *Container) generateLXCConfig() error {
 	fo, err := os.Create(container.lxcConfigPath())
 	if err != nil {
 		return err
 	}
 	defer fo.Close()
-	if err := LxcTemplateCompiled.Execute(fo, container); err != nil {
-		return err
-	}
-	if hostConfig != nil {
-		if err := LxcHostConfigTemplateCompiled.Execute(fo, hostConfig); err != nil {
-			return err
-		}
-	}
-	return nil
+	return LxcTemplateCompiled.Execute(fo, container)
 }
 
 func (container *Container) startPty() error {
@@ -580,7 +669,7 @@ func (container *Container) Attach(stdin io.ReadCloser, stdinCloser io.Closer, s
 	})
 }
 
-func (container *Container) Start(hostConfig *HostConfig) (err error) {
+func (container *Container) Start() (err error) {
 	container.State.Lock()
 	defer container.State.Unlock()
 	defer func() {
@@ -588,10 +677,6 @@ func (container *Container) Start(hostConfig *HostConfig) (err error) {
 			container.cleanup()
 		}
 	}()
-
-	if hostConfig == nil { // in docker start of docker restart we want to reuse previous HostConfigFile
-		hostConfig, _ = container.ReadHostConfig()
-	}
 
 	if container.State.Running {
 		return fmt.Errorf("The container %s is already running.", container.ID)
@@ -626,7 +711,7 @@ func (container *Container) Start(hostConfig *HostConfig) (err error) {
 	// Define illegal container destinations
 	illegalDsts := []string{"/", "."}
 
-	for _, bind := range hostConfig.Binds {
+	for _, bind := range container.hostConfig.Binds {
 		// FIXME: factorize bind parsing in parseBind
 		var src, dst, mode string
 		arr := strings.Split(bind, ":")
@@ -736,7 +821,7 @@ func (container *Container) Start(hostConfig *HostConfig) (err error) {
 				}
 				if len(srcList) == 0 {
 					// If the source volume is empty copy files from the root into the volume
-					if err := CopyWithTar(rootVolPath, srcPath); err != nil {
+					if err := archive.CopyWithTar(rootVolPath, srcPath); err != nil {
 						return err
 					}
 
@@ -760,7 +845,7 @@ func (container *Container) Start(hostConfig *HostConfig) (err error) {
 		}
 	}
 
-	if err := container.generateLXCConfig(hostConfig); err != nil {
+	if err := container.generateLXCConfig(); err != nil {
 		return err
 	}
 
@@ -781,17 +866,65 @@ func (container *Container) Start(hostConfig *HostConfig) (err error) {
 		params = append(params, "-u", container.Config.User)
 	}
 
-	if container.Config.Tty {
-		params = append(params, "-e", "TERM=xterm")
+	// Setup environment
+	env := []string{
+		"HOME=/",
+		"PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
+		"container=lxc",
+		"HOSTNAME=" + container.Config.Hostname,
 	}
 
-	// Setup environment
-	params = append(params,
-		"-e", "HOME=/",
-		"-e", "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin",
-		"-e", "container=lxc",
-		"-e", "HOSTNAME="+container.Config.Hostname,
-	)
+	if container.Config.Tty {
+		env = append(env, "TERM=xterm")
+	}
+
+	// Init any links between the parent and children
+	runtime := container.runtime
+
+	children, err := runtime.Children(container.Name)
+	if err != nil {
+		return err
+	}
+
+	if len(children) > 0 {
+		container.activeLinks = make(map[string]*Link, len(children))
+
+		// If we encounter an error make sure that we rollback any network
+		// config and ip table changes
+		rollback := func() {
+			for _, link := range container.activeLinks {
+				link.Disable()
+			}
+			container.activeLinks = nil
+		}
+
+		for p, child := range children {
+			link, err := NewLink(container, child, p, runtime.networkManager.bridgeIface)
+			if err != nil {
+				rollback()
+				return err
+			}
+
+			container.activeLinks[link.Alias()] = link
+			if err := link.Enable(); err != nil {
+				rollback()
+				return err
+			}
+
+			for _, envVar := range link.ToEnv() {
+				env = append(env, envVar)
+			}
+		}
+	}
+
+	for _, elem := range container.Config.Env {
+		env = append(env, elem)
+	}
+
+	if err := container.generateEnvConfig(env); err != nil {
+		return err
+	}
+
 	if container.Config.WorkingDir != "" {
 		workingDir := path.Clean(container.Config.WorkingDir)
 		utils.Debugf("[working dir] working dir is %s", workingDir)
@@ -805,16 +938,15 @@ func (container *Container) Start(hostConfig *HostConfig) (err error) {
 		)
 	}
 
-	for _, elem := range container.Config.Env {
-		params = append(params, "-e", elem)
-	}
-
 	// Program
 	params = append(params, "--", container.Path)
 	params = append(params, container.Args...)
 
-	container.cmd = exec.Command("lxc-start", params...)
-
+	var lxcStart string = "lxc-start"
+	if container.hostConfig.Privileged && container.runtime.capabilities.AppArmor {
+		lxcStart = path.Join(container.runtime.config.Root, "lxc-start-unconfined")
+	}
+	container.cmd = exec.Command(lxcStart, params...)
 	// Setup logging of stdout and stderr to disk
 	if err := container.runtime.LogToDisk(container.stdout, container.logPath("json"), "stdout"); err != nil {
 		return err
@@ -841,8 +973,7 @@ func (container *Container) Start(hostConfig *HostConfig) (err error) {
 	container.waitLock = make(chan struct{})
 
 	container.ToDisk()
-	container.SaveHostConfig(hostConfig)
-	go container.monitor(hostConfig)
+	go container.monitor()
 
 	defer utils.Debugf("Container running: %v", container.State.Running)
 	// We wait for the container to be fully running.
@@ -879,7 +1010,7 @@ func (container *Container) Start(hostConfig *HostConfig) (err error) {
 }
 
 func (container *Container) Run() error {
-	if err := container.Start(&HostConfig{}); err != nil {
+	if err := container.Start(); err != nil {
 		return err
 	}
 	container.Wait()
@@ -892,8 +1023,7 @@ func (container *Container) Output() (output []byte, err error) {
 		return nil, err
 	}
 	defer pipe.Close()
-	hostConfig := &HostConfig{}
-	if err := container.Start(hostConfig); err != nil {
+	if err := container.Start(); err != nil {
 		return nil, err
 	}
 	output, err = ioutil.ReadAll(pipe)
@@ -952,36 +1082,65 @@ func (container *Container) allocateNetwork() error {
 		}
 	}
 
-	var portSpecs []string
-	if !container.State.Ghost {
-		portSpecs = container.Config.PortSpecs
-	} else {
-		for backend, frontend := range container.NetworkSettings.PortMapping["Tcp"] {
-			portSpecs = append(portSpecs, fmt.Sprintf("%s:%s/tcp", frontend, backend))
+	if container.Config.PortSpecs != nil {
+		utils.Debugf("Migrating port mappings for container: %s", strings.Join(container.Config.PortSpecs, ", "))
+		if err := migratePortMappings(container.Config, container.hostConfig); err != nil {
+			return err
 		}
-		for backend, frontend := range container.NetworkSettings.PortMapping["Udp"] {
-			portSpecs = append(portSpecs, fmt.Sprintf("%s:%s/udp", frontend, backend))
+		container.Config.PortSpecs = nil
+		if err := container.writeHostConfig(); err != nil {
+			return err
 		}
 	}
 
-	container.NetworkSettings.PortMapping = make(map[string]PortMapping)
-	container.NetworkSettings.PortMapping["Tcp"] = make(PortMapping)
-	container.NetworkSettings.PortMapping["Udp"] = make(PortMapping)
-	for _, spec := range portSpecs {
-		nat, err := iface.AllocatePort(spec)
-		if err != nil {
-			iface.Release()
-			return err
+	portSpecs := make(map[Port]struct{})
+	bindings := make(map[Port][]PortBinding)
+
+	if !container.State.Ghost {
+		if container.Config.ExposedPorts != nil {
+			portSpecs = container.Config.ExposedPorts
 		}
-		proto := strings.Title(nat.Proto)
-		backend, frontend := strconv.Itoa(nat.Backend), strconv.Itoa(nat.Frontend)
-		container.NetworkSettings.PortMapping[proto][backend] = frontend
+		if container.hostConfig.PortBindings != nil {
+			bindings = container.hostConfig.PortBindings
+		}
+	} else {
+		if container.NetworkSettings.Ports != nil {
+			for port, binding := range container.NetworkSettings.Ports {
+				portSpecs[port] = struct{}{}
+				bindings[port] = binding
+			}
+		}
 	}
+
+	container.NetworkSettings.PortMapping = nil
+
+	for port := range portSpecs {
+		binding := bindings[port]
+		if container.hostConfig.PublishAllPorts && len(binding) == 0 {
+			binding = append(binding, PortBinding{})
+		}
+		for i := 0; i < len(binding); i++ {
+			b := binding[i]
+			nat, err := iface.AllocatePort(port, b)
+			if err != nil {
+				iface.Release()
+				return err
+			}
+			utils.Debugf("Allocate port: %s:%s->%s", nat.Binding.HostIp, port, nat.Binding.HostPort)
+			binding[i] = nat.Binding
+		}
+		bindings[port] = binding
+	}
+	container.writeHostConfig()
+
+	container.NetworkSettings.Ports = bindings
 	container.network = iface
+
 	container.NetworkSettings.Bridge = container.runtime.networkManager.bridgeIface
 	container.NetworkSettings.IPAddress = iface.IPNet.IP.String()
 	container.NetworkSettings.IPPrefixLen, _ = iface.IPNet.Mask.Size()
 	container.NetworkSettings.Gateway = iface.Gateway.String()
+
 	return nil
 }
 
@@ -994,7 +1153,7 @@ func (container *Container) releaseNetwork() {
 	container.NetworkSettings = &NetworkSettings{}
 }
 
-// FIXME: replace this with a control socket within docker-init
+// FIXME: replace this with a control socket within dockerinit
 func (container *Container) waitLxc() error {
 	for {
 		output, err := exec.Command("lxc-info", "-n", container.ID).CombinedOutput()
@@ -1008,7 +1167,7 @@ func (container *Container) waitLxc() error {
 	}
 }
 
-func (container *Container) monitor(hostConfig *HostConfig) {
+func (container *Container) monitor() {
 	// Wait for the program to exit
 
 	// If the command does not exist, try to wait via lxc
@@ -1064,6 +1223,14 @@ func (container *Container) monitor(hostConfig *HostConfig) {
 
 func (container *Container) cleanup() {
 	container.releaseNetwork()
+
+	// Disable all active links
+	if container.activeLinks != nil {
+		for _, link := range container.activeLinks {
+			link.Disable()
+		}
+	}
+
 	if container.Config.OpenStdin {
 		if err := container.stdin.Close(); err != nil {
 			utils.Errorf("%s: Error close stdin: %s", container.ID, err)
@@ -1157,11 +1324,7 @@ func (container *Container) Restart(seconds int) error {
 	if err := container.Stop(seconds); err != nil {
 		return err
 	}
-	hostConfig := &HostConfig{}
-	if err := container.Start(hostConfig); err != nil {
-		return err
-	}
-	return nil
+	return container.Start()
 }
 
 // Wait blocks until the container stops running, then returns its exit code.
@@ -1178,23 +1341,23 @@ func (container *Container) Resize(h, w int) error {
 	return term.SetWinsize(pty.Fd(), &term.Winsize{Height: uint16(h), Width: uint16(w)})
 }
 
-func (container *Container) ExportRw() (Archive, error) {
-	return Tar(container.rwPath(), Uncompressed)
+func (container *Container) ExportRw() (archive.Archive, error) {
+	return archive.Tar(container.rwPath(), archive.Uncompressed)
 }
 
 func (container *Container) RwChecksum() (string, error) {
-	rwData, err := Tar(container.rwPath(), Xz)
+	rwData, err := archive.Tar(container.rwPath(), archive.Xz)
 	if err != nil {
 		return "", err
 	}
 	return utils.HashData(rwData)
 }
 
-func (container *Container) Export() (Archive, error) {
+func (container *Container) Export() (archive.Archive, error) {
 	if err := container.EnsureMounted(); err != nil {
 		return nil, err
 	}
-	return Tar(container.RootfsPath(), Uncompressed)
+	return archive.Tar(container.RootfsPath(), archive.Uncompressed)
 }
 
 func (container *Container) WaitTimeout(timeout time.Duration) error {
@@ -1249,6 +1412,12 @@ func (container *Container) Mounted() (bool, error) {
 }
 
 func (container *Container) Unmount() error {
+	if _, err := os.Stat(container.RootfsPath()); err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
 	return Unmount(container.RootfsPath())
 }
 
@@ -1274,6 +1443,10 @@ func (container *Container) hostConfigPath() string {
 
 func (container *Container) jsonPath() string {
 	return path.Join(container.root, "config.json")
+}
+
+func (container *Container) EnvConfigPath() string {
+	return path.Join(container.root, "config.env")
 }
 
 func (container *Container) lxcConfigPath() string {
@@ -1319,7 +1492,7 @@ func (container *Container) GetSize() (int64, int64) {
 	return sizeRw, sizeRootfs
 }
 
-func (container *Container) Copy(resource string) (Archive, error) {
+func (container *Container) Copy(resource string) (archive.Archive, error) {
 	if err := container.EnsureMounted(); err != nil {
 		return nil, err
 	}
@@ -1337,5 +1510,11 @@ func (container *Container) Copy(resource string) (Archive, error) {
 		filter = []string{path.Base(basePath)}
 		basePath = path.Dir(basePath)
 	}
-	return TarFilter(basePath, Uncompressed, filter)
+	return archive.TarFilter(basePath, archive.Uncompressed, filter)
+}
+
+// Returns true if the container exposes a certain port
+func (container *Container) Exposes(p Port) bool {
+	_, exists := container.Config.ExposedPorts[p]
+	return exists
 }

@@ -1,12 +1,11 @@
 package docker
 
-import "encoding/json"
-
 type APIHistory struct {
 	ID        string   `json:"Id"`
 	Tags      []string `json:",omitempty"`
 	Created   int64
 	CreatedBy string `json:",omitempty"`
+	Size      int64
 }
 
 type APIImages struct {
@@ -52,6 +51,7 @@ type APIContainers struct {
 	Ports      []APIPort
 	SizeRw     int64
 	SizeRootFs int64
+	Names      []string
 }
 
 func (self *APIContainers) ToLegacy() APIContainersOld {
@@ -96,14 +96,7 @@ type APIPort struct {
 	PrivatePort int64
 	PublicPort  int64
 	Type        string
-}
-
-func (port *APIPort) MarshalJSON() ([]byte, error) {
-	return json.Marshal(map[string]interface{}{
-		"PrivatePort": port.PrivatePort,
-		"PublicPort":  port.PublicPort,
-		"Type":        port.Type,
-	})
+	IP          string
 }
 
 type APIVersion struct {
