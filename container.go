@@ -251,6 +251,9 @@ func ParseRun(args []string, capabilities *Capabilities) (*Config, *HostConfig, 
 	for bind := range flVolumes {
 		arr := strings.Split(bind, ":")
 		if len(arr) > 1 {
+			if arr[0] == "/" {
+				return nil, nil, cmd, fmt.Errorf("Invalid bind mount: source can't be '/'")
+			}
 			dstDir := arr[1]
 			flVolumes[dstDir] = struct{}{}
 			binds = append(binds, bind)
@@ -304,7 +307,7 @@ func ParseRun(args []string, capabilities *Capabilities) (*Config, *HostConfig, 
 	}
 
 	config := &Config{
-		Hostname:        *flHostname,
+		Hostname:        hostname,
 		Domainname:      domainname,
 		PortSpecs:       nil, // Deprecated
 		ExposedPorts:    ports,
@@ -387,11 +390,22 @@ func (settings *NetworkSettings) PortMappingAPI() []APIPort {
 
 // Inject the io.Reader at the given path. Note: do not close the reader
 func (container *Container) Inject(file io.Reader, pth string) error {
+	// Return error if path exists
+	if _, err := os.Stat(path.Join(container.rwPath(), pth)); err == nil {
+		// Since err is nil, the path could be stat'd and it exists
+		return fmt.Errorf("%s exists", pth)
+	} else if ! os.IsNotExist(err) {
+		// Expect err might be that the file doesn't exist, so
+		// if it's some other error, return that. 
+
+		return err
+	}
+
 	// Make sure the directory exists
 	if err := os.MkdirAll(path.Join(container.rwPath(), path.Dir(pth)), 0755); err != nil {
 		return err
 	}
-	// FIXME: Handle permissions/already existing dest
+
 	dest, err := os.Create(path.Join(container.rwPath(), pth))
 	if err != nil {
 		return err
@@ -1062,12 +1076,7 @@ func (container *Container) allocateNetwork() error {
 
 	var iface *NetworkInterface
 	var err error
-	if !container.State.Ghost {
-		iface, err = container.runtime.networkManager.Allocate()
-		if err != nil {
-			return err
-		}
-	} else {
+	if container.State.Ghost {
 		manager := container.runtime.networkManager
 		if manager.disabled {
 			iface = &NetworkInterface{disabled: true}
@@ -1077,8 +1086,20 @@ func (container *Container) allocateNetwork() error {
 				Gateway: manager.bridgeNetwork.IP,
 				manager: manager,
 			}
-			ipNum := ipToInt(iface.IPNet.IP)
-			manager.ipAllocator.inUse[ipNum] = struct{}{}
+			if iface !=nil && iface.IPNet.IP != nil {
+				ipNum := ipToInt(iface.IPNet.IP)
+				manager.ipAllocator.inUse[ipNum] = struct{}{}
+			} else {
+				iface, err = container.runtime.networkManager.Allocate()
+				if err != nil {
+					return err
+				}
+			}
+		}
+	} else {
+		iface, err = container.runtime.networkManager.Allocate()
+		if err != nil {
+			return err
 		}
 	}
 

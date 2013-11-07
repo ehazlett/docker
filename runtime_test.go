@@ -22,6 +22,7 @@ import (
 const (
 	unitTestImageName     = "docker-test-image"
 	unitTestImageID       = "83599e29c455eb719f77d799bc7c51521b9551972f5a850d7ad265bc1b5292f6" // 1.0
+	unitTestImageIDShort  = "83599e29c455"
 	unitTestNetworkBridge = "testdockbr0"
 	unitTestStoreBase     = "/var/lib/docker/unit-tests"
 	testDaemonAddr        = "127.0.0.1:4270"
@@ -119,7 +120,7 @@ func init() {
 
 func setupBaseImage() {
 	config := &DaemonConfig{
-		Root:   unitTestStoreBase,
+		Root:        unitTestStoreBase,
 		AutoRestart: false,
 		BridgeIface: unitTestNetworkBridge,
 	}
@@ -826,5 +827,21 @@ func TestGetAllChildren(t *testing.T) {
 		if value.ID != childContainer.ID {
 			t.Fatalf("Expected id %s got %s", childContainer.ID, value.ID)
 		}
+	}
+}
+
+func TestGetFullName(t *testing.T) {
+	runtime := mkRuntime(t)
+	defer nuke(runtime)
+
+	name, err := runtime.getFullName("testing")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if name != "/testing" {
+		t.Fatalf("Expected /testing got %s", name)
+	}
+	if _, err := runtime.getFullName(""); err == nil {
+		t.Fatal("Error should not be nil")
 	}
 }
