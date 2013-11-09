@@ -53,7 +53,7 @@ if [ ! -e $TMP_CHROOT/root ] ; then
     start-stop-daemon --start --quiet --background --exec $DOCKER -- -d -dns 8.8.8.8
     # wait for daemon
     sleep 5
-    $DOCKER pull ehazlett/docker-image-base
+    $DOCKER pull ehazlett/docker-base-image
     CNT=$($DOCKER run -i -t -d ehazlett/docker-base-image /bin/bash -c exit 0)
     pushd $TMP_CHROOT > /dev/null
     $DOCKER export $CNT | tar -x
