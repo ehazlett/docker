@@ -1,5 +1,5 @@
-#!/bin/sh
-# Bootable Disk Image builder
+#!/bin/bash
+# Bootable Disk Image builder (common)
 #
 # Needs to be run as follows:
 # docker run -i -t -v `pwd`:/go/src/github.com/dotcloud/docker -privileged -lxc-conf=lxc.aa_profile=unconfined docker ./hack/make.sh binary ubuntu disk_image
@@ -10,14 +10,17 @@
 #
 # Image Details:
 # 
-# Images are built from Ubuntu 12.04 (precise) amd64
+# Images are built from Ubuntu 12.04 (precise) amd64 (debootstrap)
 # Username: root
 # Password: docker
 #
 DEST=$1
 DEBS=`ls $DEST/../ubuntu/*.deb`
-OUTPUT_DIR=/tmp/image
+TMP_CHROOT=/tmp/chroot
 SCRIPT=/tmp/script
+OUTPUT_DIR=/tmp/image
+
+mkdir -p $TMP_CHROOT
 
 # add docker packaged debian archives
 for DEB in $DEBS
@@ -43,8 +46,23 @@ rm -rf \$1/var/tmp/*
 EOF
 chmod +x $SCRIPT
 
-# create vm root disk
-vmbuilder kvm ubuntu --suite precise --flavour virtual --arch amd64 --add ca-certificates --verbose -d $OUTPUT_DIR --copy /tmp/docker_debs --execscript $SCRIPT
+# pull base debootstrap image if needed
+if [ ! -e $TMP_CHROOT/root ] ; then
+    # get base docker image
+    DOCKER=$DEST/../binary/docker-$VERSION
+    start-stop-daemon --start --quiet --background --exec $DOCKER -- -d -dns 8.8.8.8
+    # wait for daemon
+    sleep 5
+    $DOCKER pull ehazlett/docker-image-base
+    CNT=$($DOCKER run -i -t -d ehazlett/docker-image-base /bin/bash -c exit 0)
+    pushd $TMP_CHROOT > /dev/null
+    $DOCKER export $CNT | tar -x
+    # override chroot resolv.conf
+    echo "nameserver 8.8.8.8" > $TMP_CHROOT/etc/resolv.conf
+fi
+
+# build the bootable image
+vmbuilder kvm ubuntu --existing-chroot $TMP_CHROOT --verbose -d $OUTPUT_DIR --copy /tmp/docker_debs --execscript $SCRIPT
 
 # copy to dest
 cp $OUTPUT_DIR/*.qcow2 $DEST/docker-$VERSION.qcow2

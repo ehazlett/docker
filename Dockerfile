@@ -33,7 +33,7 @@ run	apt-get update
 run	apt-get install -y -q curl
 run	apt-get install -y -q git
 run	apt-get install -y -q mercurial
-run     apt-get install -y -q qemu-utils python-vm-builder-ec2
+run     apt-get install -y -q qemu-utils python-vm-builder python-vm-builder-ec2
 run apt-get install -y -q build-essential libsqlite3-dev
 
 # Install Go
