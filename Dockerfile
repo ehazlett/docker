@@ -28,11 +28,12 @@ from	ubuntu:12.04
 maintainer	Solomon Hykes <solomon@dotcloud.com>
 
 # Build dependencies
-run	echo 'deb http://archive.ubuntu.com/ubuntu precise main universe' > /etc/apt/sources.list
+run	echo 'deb http://archive.ubuntu.com/ubuntu precise main universe multiverse' > /etc/apt/sources.list
 run	apt-get update
 run	apt-get install -y -q curl
 run	apt-get install -y -q git
 run	apt-get install -y -q mercurial
+run     apt-get install -y -q qemu-utils python-vm-builder-ec2
 run apt-get install -y -q build-essential libsqlite3-dev
 
 # Install Go

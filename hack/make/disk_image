@@ -1,0 +1,39 @@
+#!/bin/sh
+
+DEST=$1
+DEBS=`ls $DEST/../ubuntu/*.deb`
+OUTPUT_DIR=/tmp/image
+SCRIPT=/tmp/script
+
+# add docker packaged debian archives
+for DEB in $DEBS
+do
+    echo "$DEB /var/tmp/`basename $DEB`" >> /tmp/docker_debs
+done
+
+# post vmbuilder script
+cat << EOF > $SCRIPT
+#!/bin/bash
+# install script
+cat << EOD > \$1/var/tmp/build.sh
+#!/bin/bash
+cd /var/tmp
+RUNLEVEL=1 DEBIAN_FRONTEND=noninteractive dpkg -i --force-all *.deb > /dev/null 2>&1
+RUNLEVEL=1 DEBIAN_FRONTEND=noninteractive apt-get -f -y install
+EOD
+chroot \$1 /bin/bash /var/tmp/build.sh
+echo "root:docker" | chroot \$1 chpasswd
+echo "docker" > \$1/etc/hostname
+# cleanup
+rm -rf \$1/var/tmp/*
+EOF
+chmod +x $SCRIPT
+
+# create vm root disk
+vmbuilder kvm ubuntu --suite precise --flavour virtual --arch amd64 --add ca-certificates --verbose -d $OUTPUT_DIR --copy /tmp/docker_debs --execscript $SCRIPT
+
+# copy to dest
+cp $OUTPUT_DIR/*.qcow2 $DEST/docker-$VERSION.qcow2
+# add VDI and VMDK images
+qemu-img convert $DEST/docker-$VERSION.qcow2 -O vdi $DEST/docker-$VERSION.vdi
+qemu-img convert $DEST/docker-$VERSION.qcow2 -O vmdk $DEST/docker-$VERSION.vmdk
