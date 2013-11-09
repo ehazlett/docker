@@ -1,4 +1,12 @@
 #!/bin/sh
+# Bootable Disk Image builder
+#
+# Needs to be run as follows:
+# docker run -i -t -v `pwd`:/go/src/github.com/dotcloud/docker -privileged -lxc-conf=lxc.aa_profile=unconfined docker ./hack/make.sh binary ubuntu disk_image
+#
+# Images will be in bundles/<version>/disk_image/
+#
+# Currently builds qcow2, vdi, and vmdk
 
 DEST=$1
 DEBS=`ls $DEST/../ubuntu/*.deb`
