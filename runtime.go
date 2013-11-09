@@ -172,6 +172,7 @@ func (runtime *Runtime) Register(container *Container) error {
 	if !container.State.Running {
 		close(container.waitLock)
 	} else if !nomonitor {
+		container.allocateNetwork()
 		go container.monitor()
 	}
 	return nil
@@ -286,13 +287,12 @@ func (runtime *Runtime) restore() error {
 	// Any containers that are left over do not exist in the graph
 	for _, container := range containers {
 		// Try to set the default name for a container if it exists prior to links
-		name, err := generateRandomName(runtime)
+		container.Name, err = generateRandomName(runtime)
 		if err != nil {
 			container.Name = container.ShortID()
 		}
-		container.Name = name
 
-		if _, err := runtime.containerGraph.Set(name, container.ID); err != nil {
+		if _, err := runtime.containerGraph.Set(container.Name, container.ID); err != nil {
 			utils.Debugf("Setting default id - %s", err)
 		}
 		register(container)
