@@ -7,7 +7,13 @@
 # Images will be in bundles/<version>/disk_image/
 #
 # Currently builds qcow2, vdi, and vmdk
-
+#
+# Image Details:
+# 
+# Images are built from Ubuntu 12.04 (precise) amd64
+# Username: root
+# Password: docker
+#
 DEST=$1
 DEBS=`ls $DEST/../ubuntu/*.deb`
 OUTPUT_DIR=/tmp/image
