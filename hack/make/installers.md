@@ -17,7 +17,7 @@ For the initial release the Docker images are built using Ubuntu 12.04.  There
 is a base Docker image (currently `ehazlett/docker-image-base`) that was created
 as follows:
 
-* `vmbuilder kvm ubuntu --suite precise --arch amd64 --flavour virtual --add ca-certificates --chroot-dir /tmp/chroot --only-chroot`
+* `vmbuilder kvm ubuntu --suite precise --arch amd64 --flavour virtual --add ca-certificates --add linux-image-extra-virtual --chroot-dir /tmp/chroot --only-chroot`
 * `tar -C /tmp/chroot -c . | docker import - docker-base-image`
 
 You can change `docker-base-image` to a repository and push to the index as well.

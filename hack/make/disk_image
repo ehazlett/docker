@@ -54,7 +54,7 @@ if [ ! -e $TMP_CHROOT/root ] ; then
     # wait for daemon
     sleep 5
     $DOCKER pull ehazlett/docker-image-base
-    CNT=$($DOCKER run -i -t -d ehazlett/docker-image-base /bin/bash -c exit 0)
+    CNT=$($DOCKER run -i -t -d ehazlett/docker-base-image /bin/bash -c exit 0)
     pushd $TMP_CHROOT > /dev/null
     $DOCKER export $CNT | tar -x
     # override chroot resolv.conf
