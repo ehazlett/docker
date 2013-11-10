@@ -35,6 +35,7 @@ cat << EOF > $SCRIPT
 cat << EOD > \$1/var/tmp/build.sh
 #!/bin/bash
 cd /var/tmp
+RUNLEVEL=1 DEBIAN_FRONTEND=noninteractive apt-get -y install openssh-server
 RUNLEVEL=1 DEBIAN_FRONTEND=noninteractive dpkg -i --force-all *.deb > /dev/null 2>&1
 RUNLEVEL=1 DEBIAN_FRONTEND=noninteractive apt-get -f -y install
 EOD
