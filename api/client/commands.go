@@ -1408,7 +1408,7 @@ func (cli *DockerCli) CmdPs(args ...string) error {
 				outCommand = utils.Trunc(outCommand, 20)
 			}
 			ports.ReadListFrom([]byte(out.Get("Ports")))
-			fmt.Fprintf(w, "%s\t%s\t%s\t%s ago\t%s\t%s\t%s\t", outID, out.Get("Image"), outCommand, utils.HumanDuration(time.Now().UTC().Sub(time.Unix(out.GetInt64("Created"), 0))), out.Get("Status"), api.DisplayablePorts(ports), strings.Join(outNames, ","), out.Get("Node"))
+			fmt.Fprintf(w, "%s\t%s\t%s\t%s ago\t%s\t%s\t%s\t%s\t", outID, out.Get("Image"), outCommand, utils.HumanDuration(time.Now().UTC().Sub(time.Unix(out.GetInt64("Created"), 0))), out.Get("Status"), api.DisplayablePorts(ports), strings.Join(outNames, ","), out.Get("Node"))
 			if *size {
 				if out.GetInt("SizeRootFs") > 0 {
 					fmt.Fprintf(w, "%s (virtual %s)\n", utils.HumanSize(out.GetInt64("SizeRw")), utils.HumanSize(out.GetInt64("SizeRootFs")))
