@@ -43,6 +43,7 @@ DEFAULT_BUNDLES=(
 	binary
 	test
 	test-integration
+	test-integration-cli
 	dynbinary
 	dyntest
 	dyntest-integration
@@ -89,7 +90,7 @@ LDFLAGS='
 '
 LDFLAGS_STATIC='-linkmode external'
 EXTLDFLAGS_STATIC='-static'
-BUILDFLAGS=( -a -tags "netgo $DOCKER_BUILDTAGS" )
+BUILDFLAGS=( -a -tags "netgo static_build $DOCKER_BUILDTAGS" )
 
 # A few more flags that are specific just to building a completely-static binary (see hack/make/binary)
 # PLEASE do not use these anywhere else.
@@ -139,6 +140,7 @@ find_dirs() {
 		\( \
 			-wholename './vendor' \
 			-o -wholename './integration' \
+			-o -wholename './integration-cli' \
 			-o -wholename './contrib' \
 			-o -wholename './pkg/mflag/example' \
 			-o -wholename './.git' \

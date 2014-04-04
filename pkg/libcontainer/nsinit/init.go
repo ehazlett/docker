@@ -4,6 +4,11 @@ package nsinit
 
 import (
 	"fmt"
+	"os"
+	"runtime"
+	"syscall"
+
+	"github.com/dotcloud/docker/pkg/label"
 	"github.com/dotcloud/docker/pkg/libcontainer"
 	"github.com/dotcloud/docker/pkg/libcontainer/apparmor"
 	"github.com/dotcloud/docker/pkg/libcontainer/capabilities"
@@ -11,8 +16,6 @@ import (
 	"github.com/dotcloud/docker/pkg/libcontainer/utils"
 	"github.com/dotcloud/docker/pkg/system"
 	"github.com/dotcloud/docker/pkg/user"
-	"os"
-	"syscall"
 )
 
 // Init is the init process that first runs inside a new namespace to setup mounts, users, networking,
@@ -51,17 +54,14 @@ func (ns *linuxNs) Init(container *libcontainer.Container, uncleanRootfs, consol
 			return fmt.Errorf("setctty %s", err)
 		}
 	}
-	// this is our best effort to let the process know that the parent has died and that it
-	// should it should act on it how it sees fit
-	if err := system.ParentDeathSignal(uintptr(syscall.SIGTERM)); err != nil {
-		return fmt.Errorf("parent death signal %s", err)
-	}
-	ns.logger.Println("setup mount namespace")
-	if err := setupNewMountNamespace(rootfs, container.Mounts, console, container.ReadonlyFs, container.NoPivotRoot); err != nil {
-		return fmt.Errorf("setup mount namespace %s", err)
-	}
 	if err := setupNetwork(container, context); err != nil {
 		return fmt.Errorf("setup networking %s", err)
+	}
+
+	label.Init()
+	ns.logger.Println("setup mount namespace")
+	if err := setupNewMountNamespace(rootfs, container.Mounts, console, container.ReadonlyFs, container.NoPivotRoot, container.Context["mount_label"]); err != nil {
+		return fmt.Errorf("setup mount namespace %s", err)
 	}
 	if err := system.Sethostname(container.Hostname); err != nil {
 		return fmt.Errorf("sethostname %s", err)
@@ -75,6 +75,10 @@ func (ns *linuxNs) Init(container *libcontainer.Container, uncleanRootfs, consol
 		if err := apparmor.ApplyProfile(os.Getpid(), profile); err != nil {
 			return err
 		}
+	}
+	runtime.LockOSThread()
+	if err := label.SetProcessLabel(container.Context["process_label"]); err != nil {
+		return fmt.Errorf("SetProcessLabel label %s", err)
 	}
 	ns.logger.Printf("execing %s\n", args[0])
 	return system.Execv(args[0], args[0:], container.Env)

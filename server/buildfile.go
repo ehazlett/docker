@@ -395,9 +395,18 @@ func (b *buildFile) checkPathForAddition(orig string) error {
 
 func (b *buildFile) addContext(container *runtime.Container, orig, dest string, remote bool) error {
 	var (
+		err      error
 		origPath = path.Join(b.contextPath, orig)
 		destPath = path.Join(container.RootfsPath(), dest)
 	)
+
+	if destPath != container.RootfsPath() {
+		destPath, err = utils.FollowSymlinkInScope(destPath, container.RootfsPath())
+		if err != nil {
+			return err
+		}
+	}
+
 	// Preserve the trailing '/'
 	if strings.HasSuffix(dest, "/") {
 		destPath = destPath + "/"
@@ -410,8 +419,20 @@ func (b *buildFile) addContext(container *runtime.Container, orig, dest string, 
 		return err
 	}
 
+	chownR := func(destPath string, uid, gid int) error {
+		return filepath.Walk(destPath, func(path string, info os.FileInfo, err error) error {
+			if err := os.Lchown(path, uid, gid); err != nil {
+				return err
+			}
+			return nil
+		})
+	}
+
 	if fi.IsDir() {
 		if err := archive.CopyWithTar(origPath, destPath); err != nil {
+			return err
+		}
+		if err := chownR(destPath, 0, 0); err != nil {
 			return err
 		}
 		return nil
@@ -441,6 +462,10 @@ func (b *buildFile) addContext(container *runtime.Container, orig, dest string, 
 		return err
 	}
 	if err := archive.CopyWithTar(origPath, destPath); err != nil {
+		return err
+	}
+
+	if err := chownR(destPath, 0, 0); err != nil {
 		return err
 	}
 	return nil
@@ -477,27 +502,35 @@ func (b *buildFile) CmdAdd(args string) error {
 	)
 
 	if utils.IsURL(orig) {
+		// Initiate the download
 		isRemote = true
 		resp, err := utils.Download(orig)
 		if err != nil {
 			return err
 		}
+
+		// Create a tmp dir
 		tmpDirName, err := ioutil.TempDir(b.contextPath, "docker-remote")
 		if err != nil {
 			return err
 		}
+
+		// Create a tmp file within our tmp dir
 		tmpFileName := path.Join(tmpDirName, "tmp")
 		tmpFile, err := os.OpenFile(tmpFileName, os.O_RDWR|os.O_CREATE|os.O_EXCL, 0600)
 		if err != nil {
 			return err
 		}
 		defer os.RemoveAll(tmpDirName)
-		if _, err = io.Copy(tmpFile, resp.Body); err != nil {
+
+		// Download and dump result to tmp file
+		if _, err := io.Copy(tmpFile, resp.Body); err != nil {
 			tmpFile.Close()
 			return err
 		}
-		origPath = path.Join(filepath.Base(tmpDirName), filepath.Base(tmpFileName))
 		tmpFile.Close()
+
+		origPath = path.Join(filepath.Base(tmpDirName), filepath.Base(tmpFileName))
 
 		// Process the checksum
 		r, err := archive.Tar(tmpFileName, archive.Uncompressed)
@@ -736,20 +769,19 @@ func (b *buildFile) Build(context io.Reader) (string, error) {
 	if len(fileBytes) == 0 {
 		return "", ErrDockerfileEmpty
 	}
-	dockerfile := string(fileBytes)
-	dockerfile = lineContinuation.ReplaceAllString(dockerfile, "")
-	stepN := 0
+	var (
+		dockerfile = lineContinuation.ReplaceAllString(stripComments(fileBytes), "")
+		stepN      = 0
+	)
 	for _, line := range strings.Split(dockerfile, "\n") {
 		line = strings.Trim(strings.Replace(line, "\t", " ", -1), " \t\r\n")
-		// Skip comments and empty line
-		if len(line) == 0 || line[0] == '#' {
+		if len(line) == 0 {
 			continue
 		}
 		if err := b.BuildStep(fmt.Sprintf("%d", stepN), line); err != nil {
 			return "", err
 		}
 		stepN += 1
-
 	}
 	if b.image != "" {
 		fmt.Fprintf(b.outStream, "Successfully built %s\n", utils.TruncateID(b.image))
@@ -784,6 +816,20 @@ func (b *buildFile) BuildStep(name, expression string) error {
 
 	fmt.Fprintf(b.outStream, " ---> %s\n", utils.TruncateID(b.image))
 	return nil
+}
+
+func stripComments(raw []byte) string {
+	var (
+		out   []string
+		lines = strings.Split(string(raw), "\n")
+	)
+	for _, l := range lines {
+		if len(l) == 0 || l[0] == '#' {
+			continue
+		}
+		out = append(out, l)
+	}
+	return strings.Join(out, "\n")
 }
 
 func NewBuildFile(srv *Server, outStream, errStream io.Writer, verbose, utilizeCache, rm bool, outOld io.Writer, sf *utils.StreamFormatter, auth *registry.AuthConfig, authConfigFile *registry.ConfigFile) BuildFile {

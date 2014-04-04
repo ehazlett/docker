@@ -7,6 +7,10 @@ import (
 	"os/exec"
 )
 
+// Context is a generic key value pair that allows
+// arbatrary data to be sent
+type Context map[string]string
+
 var (
 	ErrNotRunning              = errors.New("Process could not be started")
 	ErrWaitTimeoutReached      = errors.New("Wait timeout reached")
@@ -80,6 +84,7 @@ type Driver interface {
 	Name() string                                 // Driver name
 	Info(id string) Info                          // "temporary" hack (until we move state from core to plugins)
 	GetPidsForContainer(id string) ([]int, error) // Returns a list of pids for the given container.
+	Terminate(c *Command) error                   // kill it with fire
 }
 
 // Network settings of the container
@@ -112,20 +117,20 @@ type Mount struct {
 type Command struct {
 	exec.Cmd `json:"-"`
 
-	ID         string     `json:"id"`
-	Privileged bool       `json:"privileged"`
-	User       string     `json:"user"`
-	Rootfs     string     `json:"rootfs"`   // root fs of the container
-	InitPath   string     `json:"initpath"` // dockerinit
-	Entrypoint string     `json:"entrypoint"`
-	Arguments  []string   `json:"arguments"`
-	WorkingDir string     `json:"working_dir"`
-	ConfigPath string     `json:"config_path"` // this should be able to be removed when the lxc template is moved into the driver
-	Tty        bool       `json:"tty"`
-	Network    *Network   `json:"network"`
-	Config     []string   `json:"config"` //  generic values that specific drivers can consume
-	Resources  *Resources `json:"resources"`
-	Mounts     []Mount    `json:"mounts"`
+	ID         string              `json:"id"`
+	Privileged bool                `json:"privileged"`
+	User       string              `json:"user"`
+	Rootfs     string              `json:"rootfs"`   // root fs of the container
+	InitPath   string              `json:"initpath"` // dockerinit
+	Entrypoint string              `json:"entrypoint"`
+	Arguments  []string            `json:"arguments"`
+	WorkingDir string              `json:"working_dir"`
+	ConfigPath string              `json:"config_path"` // this should be able to be removed when the lxc template is moved into the driver
+	Tty        bool                `json:"tty"`
+	Network    *Network            `json:"network"`
+	Config     map[string][]string `json:"config"` //  generic values that specific drivers can consume
+	Resources  *Resources          `json:"resources"`
+	Mounts     []Mount             `json:"mounts"`
 
 	Terminal     Terminal `json:"-"`             // standard or tty terminal
 	Console      string   `json:"-"`             // dev/console path

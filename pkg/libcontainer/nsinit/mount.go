@@ -4,6 +4,7 @@ package nsinit
 
 import (
 	"fmt"
+	"github.com/dotcloud/docker/pkg/label"
 	"github.com/dotcloud/docker/pkg/libcontainer"
 	"github.com/dotcloud/docker/pkg/system"
 	"io/ioutil"
@@ -20,7 +21,7 @@ const defaultMountFlags = syscall.MS_NOEXEC | syscall.MS_NOSUID | syscall.MS_NOD
 //
 // There is no need to unmount the new mounts because as soon as the mount namespace
 // is no longer in use, the mounts will be removed automatically
-func setupNewMountNamespace(rootfs string, bindMounts []libcontainer.Mount, console string, readonly, noPivotRoot bool) error {
+func setupNewMountNamespace(rootfs string, bindMounts []libcontainer.Mount, console string, readonly, noPivotRoot bool, mountLabel string) error {
 	flag := syscall.MS_PRIVATE
 	if noPivotRoot {
 		flag = syscall.MS_SLAVE
@@ -31,12 +32,7 @@ func setupNewMountNamespace(rootfs string, bindMounts []libcontainer.Mount, cons
 	if err := system.Mount(rootfs, rootfs, "bind", syscall.MS_BIND|syscall.MS_REC, ""); err != nil {
 		return fmt.Errorf("mouting %s as bind %s", rootfs, err)
 	}
-	if readonly {
-		if err := system.Mount(rootfs, rootfs, "bind", syscall.MS_BIND|syscall.MS_REMOUNT|syscall.MS_RDONLY|syscall.MS_REC, ""); err != nil {
-			return fmt.Errorf("mounting %s as readonly %s", rootfs, err)
-		}
-	}
-	if err := mountSystem(rootfs); err != nil {
+	if err := mountSystem(rootfs, mountLabel); err != nil {
 		return fmt.Errorf("mount system %s", err)
 	}
 
@@ -59,12 +55,7 @@ func setupNewMountNamespace(rootfs string, bindMounts []libcontainer.Mount, cons
 	if err := copyDevNodes(rootfs); err != nil {
 		return fmt.Errorf("copy dev nodes %s", err)
 	}
-	// In non-privileged mode, this fails. Discard the error.
-	setupLoopbackDevices(rootfs)
-	if err := setupDev(rootfs); err != nil {
-		return err
-	}
-	if err := setupPtmx(rootfs, console); err != nil {
+	if err := setupPtmx(rootfs, console, mountLabel); err != nil {
 		return err
 	}
 	if err := system.Chdir(rootfs); err != nil {
@@ -78,6 +69,12 @@ func setupNewMountNamespace(rootfs string, bindMounts []libcontainer.Mount, cons
 	} else {
 		if err := rootPivot(rootfs); err != nil {
 			return err
+		}
+	}
+
+	if readonly {
+		if err := system.Mount("/", "/", "bind", syscall.MS_BIND|syscall.MS_REMOUNT|syscall.MS_RDONLY|syscall.MS_REC, ""); err != nil {
+			return fmt.Errorf("mounting %s as readonly %s", rootfs, err)
 		}
 	}
 
@@ -143,19 +140,6 @@ func copyDevNodes(rootfs string) error {
 	return nil
 }
 
-func setupLoopbackDevices(rootfs string) error {
-	for i := 0; ; i++ {
-		if err := copyDevNode(rootfs, fmt.Sprintf("loop%d", i)); err != nil {
-			if !os.IsNotExist(err) {
-				return err
-			}
-			break
-		}
-
-	}
-	return nil
-}
-
 func copyDevNode(rootfs, node string) error {
 	stat, err := os.Stat(filepath.Join("/dev", node))
 	if err != nil {
@@ -171,32 +155,8 @@ func copyDevNode(rootfs, node string) error {
 	return nil
 }
 
-// setupDev symlinks the current processes pipes into the
-// appropriate destination on the containers rootfs
-func setupDev(rootfs string) error {
-	for _, link := range []struct {
-		from string
-		to   string
-	}{
-		{"/proc/kcore", "/dev/core"},
-		{"/proc/self/fd", "/dev/fd"},
-		{"/proc/self/fd/0", "/dev/stdin"},
-		{"/proc/self/fd/1", "/dev/stdout"},
-		{"/proc/self/fd/2", "/dev/stderr"},
-	} {
-		dest := filepath.Join(rootfs, link.to)
-		if err := os.Remove(dest); err != nil && !os.IsNotExist(err) {
-			return fmt.Errorf("remove %s %s", dest, err)
-		}
-		if err := os.Symlink(link.from, dest); err != nil {
-			return fmt.Errorf("symlink %s %s", dest, err)
-		}
-	}
-	return nil
-}
-
 // setupConsole ensures that the container has a proper /dev/console setup
-func setupConsole(rootfs, console string) error {
+func setupConsole(rootfs, console string, mountLabel string) error {
 	oldMask := system.Umask(0000)
 	defer system.Umask(oldMask)
 
@@ -220,6 +180,9 @@ func setupConsole(rootfs, console string) error {
 	if err := system.Mknod(dest, (st.Mode&^07777)|0600, int(st.Rdev)); err != nil {
 		return fmt.Errorf("mknod %s %s", dest, err)
 	}
+	if err := label.SetFileLabel(console, mountLabel); err != nil {
+		return fmt.Errorf("SetFileLabel Failed %s %s", dest, err)
+	}
 	if err := system.Mount(console, dest, "bind", syscall.MS_BIND, ""); err != nil {
 		return fmt.Errorf("bind %s to %s %s", console, dest, err)
 	}
@@ -228,7 +191,7 @@ func setupConsole(rootfs, console string) error {
 
 // mountSystem sets up linux specific system mounts like sys, proc, shm, and devpts
 // inside the mount namespace
-func mountSystem(rootfs string) error {
+func mountSystem(rootfs string, mountLabel string) error {
 	for _, m := range []struct {
 		source string
 		path   string
@@ -238,8 +201,8 @@ func mountSystem(rootfs string) error {
 	}{
 		{source: "proc", path: filepath.Join(rootfs, "proc"), device: "proc", flags: defaultMountFlags},
 		{source: "sysfs", path: filepath.Join(rootfs, "sys"), device: "sysfs", flags: defaultMountFlags},
-		{source: "shm", path: filepath.Join(rootfs, "dev", "shm"), device: "tmpfs", flags: defaultMountFlags, data: "mode=1777,size=65536k"},
-		{source: "devpts", path: filepath.Join(rootfs, "dev", "pts"), device: "devpts", flags: syscall.MS_NOSUID | syscall.MS_NOEXEC, data: "newinstance,ptmxmode=0666,mode=620,gid=5"},
+		{source: "shm", path: filepath.Join(rootfs, "dev", "shm"), device: "tmpfs", flags: defaultMountFlags, data: label.FormatMountLabel("mode=1755,size=65536k", mountLabel)},
+		{source: "devpts", path: filepath.Join(rootfs, "dev", "pts"), device: "devpts", flags: syscall.MS_NOSUID | syscall.MS_NOEXEC, data: label.FormatMountLabel("newinstance,ptmxmode=0666,mode=620,gid=5", mountLabel)},
 	} {
 		if err := os.MkdirAll(m.path, 0755); err != nil && !os.IsExist(err) {
 			return fmt.Errorf("mkdirall %s %s", m.path, err)
@@ -253,7 +216,7 @@ func mountSystem(rootfs string) error {
 
 // setupPtmx adds a symlink to pts/ptmx for /dev/ptmx and
 // finishes setting up /dev/console
-func setupPtmx(rootfs, console string) error {
+func setupPtmx(rootfs, console string, mountLabel string) error {
 	ptmx := filepath.Join(rootfs, "dev/ptmx")
 	if err := os.Remove(ptmx); err != nil && !os.IsNotExist(err) {
 		return err
@@ -262,7 +225,7 @@ func setupPtmx(rootfs, console string) error {
 		return fmt.Errorf("symlink dev ptmx %s", err)
 	}
 	if console != "" {
-		if err := setupConsole(rootfs, console); err != nil {
+		if err := setupConsole(rootfs, console, mountLabel); err != nil {
 			return err
 		}
 	}

@@ -361,8 +361,12 @@ func (container *Container) Attach(stdin io.ReadCloser, stdinCloser io.Closer, s
 func populateCommand(c *Container) {
 	var (
 		en           *execdriver.Network
-		driverConfig []string
+		driverConfig = c.hostConfig.DriverOptions
 	)
+
+	if driverConfig == nil {
+		driverConfig = make(map[string][]string)
+	}
 
 	en = &execdriver.Network{
 		Mtu:       c.runtime.config.Mtu,
@@ -379,11 +383,9 @@ func populateCommand(c *Container) {
 		}
 	}
 
-	if lxcConf := c.hostConfig.LxcConf; lxcConf != nil {
-		for _, pair := range lxcConf {
-			driverConfig = append(driverConfig, fmt.Sprintf("%s = %s", pair.Key, pair.Value))
-		}
-	}
+	// TODO: this can be removed after lxc-conf is fully deprecated
+	mergeLxcConfIntoOptions(c.hostConfig, driverConfig)
+
 	resources := &execdriver.Resources{
 		Memory:     c.Config.Memory,
 		MemorySwap: c.Config.MemorySwap,
@@ -423,7 +425,7 @@ func (container *Container) Start() (err error) {
 	defer container.Unlock()
 
 	if container.State.IsRunning() {
-		return fmt.Errorf("The container %s is already running.", container.ID)
+		return nil
 	}
 
 	defer func() {
@@ -535,8 +537,18 @@ func (container *Container) Start() (err error) {
 
 	if container.Config.WorkingDir != "" {
 		container.Config.WorkingDir = path.Clean(container.Config.WorkingDir)
-		if err := os.MkdirAll(path.Join(container.basefs, container.Config.WorkingDir), 0755); err != nil {
-			return nil
+
+		pthInfo, err := os.Stat(path.Join(container.basefs, container.Config.WorkingDir))
+		if err != nil {
+			if !os.IsNotExist(err) {
+				return err
+			}
+			if err := os.MkdirAll(path.Join(container.basefs, container.Config.WorkingDir), 0755); err != nil {
+				return err
+			}
+		}
+		if pthInfo != nil && !pthInfo.IsDir() {
+			return fmt.Errorf("Cannot mkdir: %s is not a directory", container.Config.WorkingDir)
 		}
 	}
 
@@ -903,12 +915,19 @@ func (container *Container) Stop(seconds int) error {
 
 	// 1. Send a SIGTERM
 	if err := container.KillSig(15); err != nil {
-		return err
+		log.Print("Failed to send SIGTERM to the process, force killing")
+		if err := container.KillSig(9); err != nil {
+			return err
+		}
 	}
 
 	// 2. Wait for the process to exit on its own
 	if err := container.WaitTimeout(time.Duration(seconds) * time.Second); err != nil {
-		return err
+		log.Printf("Container %v failed to exit within %d seconds of SIGTERM - using the force", container.ID, seconds)
+		// 3. If it doesn't, then send SIGKILL
+		if err := container.Kill(); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -950,10 +969,11 @@ func (container *Container) ExportRw() (archive.Archive, error) {
 		return nil, err
 	}
 	return utils.NewReadCloserWrapper(archive, func() error {
-		err := archive.Close()
-		container.Unmount()
-		return err
-	}), nil
+			err := archive.Close()
+			container.Unmount()
+			return err
+		}),
+		nil
 }
 
 func (container *Container) Export() (archive.Archive, error) {
@@ -967,10 +987,11 @@ func (container *Container) Export() (archive.Archive, error) {
 		return nil, err
 	}
 	return utils.NewReadCloserWrapper(archive, func() error {
-		err := archive.Close()
-		container.Unmount()
-		return err
-	}), nil
+			err := archive.Close()
+			container.Unmount()
+			return err
+		}),
+		nil
 }
 
 func (container *Container) WaitTimeout(timeout time.Duration) error {
@@ -1119,10 +1140,11 @@ func (container *Container) Copy(resource string) (io.ReadCloser, error) {
 		return nil, err
 	}
 	return utils.NewReadCloserWrapper(archive, func() error {
-		err := archive.Close()
-		container.Unmount()
-		return err
-	}), nil
+			err := archive.Close()
+			container.Unmount()
+			return err
+		}),
+		nil
 }
 
 // Returns true if the container exposes a certain port

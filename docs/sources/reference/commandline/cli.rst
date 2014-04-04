@@ -74,7 +74,7 @@ Commands
       -G, --group="docker": Group to assign the unix socket specified by -H when running in daemon mode; use '' (the empty string) to disable setting of a group
       --api-enable-cors=false: Enable CORS headers in the remote API
       -b, --bridge="": Attach containers to a pre-existing network bridge; use 'none' to disable container networking
-      --bip="": Use this CIDR notation address for the network bridge's IP, not compatible with -b
+      -bip="": Use this CIDR notation address for the network bridge's IP, not compatible with -b
       -d, --daemon=false: Enable daemon mode
       --dns=[]: Force docker to use specific DNS servers
       --dns-search=[]: Force Docker to use specific DNS search domains
@@ -600,8 +600,6 @@ To see how the ``docker:latest`` image was built:
       -a, --all=false: Show all images (by default filter out the intermediate images used to build)
       --no-trunc=false: Don't truncate output
       -q, --quiet=false: Only show numeric IDs
-      -t, --tree=false: Output graph in tree format
-      -v, --viz=false: Output graph in graphviz format
 
 Listing the most recently created images
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -636,46 +634,6 @@ Listing the full length image IDs
 	<none>                        <none>              f9f1e26352f0a3ba6a0ff68167559f64f3e21ff7ada60366e2d44a04befd1d3a   23 hours ago        1.089 GB
 	tryout                        latest              2629d1fa0b81b222fca63371ca16cbf6a0772d07759ff80e8d1369b926940074   23 hours ago        131.5 MB
 	<none>                        <none>              5ed6274db6ceb2397844896966ea239290555e74ef307030ebb01ff91b1914df   24 hours ago        1.089 GB
-
-Displaying images visually
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-    $ sudo docker images --viz | dot -Tpng -o docker.png
-
-.. image:: docker_images.gif
-   :alt: Example inheritance graph of Docker images.
-
-
-Displaying image hierarchy
-~~~~~~~~~~~~~~~~~~~~~~~~~~
-
-.. code-block:: bash
-
-    $ sudo docker images --tree
-
-    ├─8dbd9e392a96 Size: 131.5 MB (virtual 131.5 MB) Tags: ubuntu:12.04,ubuntu:latest,ubuntu:precise
-    └─27cf78414709 Size: 180.1 MB (virtual 180.1 MB)
-      └─b750fe79269d Size: 24.65 kB (virtual 180.1 MB) Tags: ubuntu:12.10,ubuntu:quantal
-        ├─f98de3b610d5 Size: 12.29 kB (virtual 180.1 MB)
-        │ └─7da80deb7dbf Size: 16.38 kB (virtual 180.1 MB)
-        │   └─65ed2fee0a34 Size: 20.66 kB (virtual 180.2 MB)
-        │     └─a2b9ea53dddc Size: 819.7 MB (virtual 999.8 MB)
-        │       └─a29b932eaba8 Size: 28.67 kB (virtual 999.9 MB)
-        │         └─e270a44f124d Size: 12.29 kB (virtual 999.9 MB) Tags: progrium/buildstep:latest
-        └─17e74ac162d8 Size: 53.93 kB (virtual 180.2 MB)
-          └─339a3f56b760 Size: 24.65 kB (virtual 180.2 MB)
-            └─904fcc40e34d Size: 96.7 MB (virtual 276.9 MB)
-              └─b1b0235328dd Size: 363.3 MB (virtual 640.2 MB)
-                └─7cb05d1acb3b Size: 20.48 kB (virtual 640.2 MB)
-                  └─47bf6f34832d Size: 20.48 kB (virtual 640.2 MB)
-                    └─f165104e82ed Size: 12.29 kB (virtual 640.2 MB)
-                      └─d9cf85a47b7e Size: 1.911 MB (virtual 642.2 MB)
-                        └─3ee562df86ca Size: 17.07 kB (virtual 642.2 MB)
-                          └─b05fc2d00e4a Size: 24.96 kB (virtual 642.2 MB)
-                            └─c96a99614930 Size: 12.29 kB (virtual 642.2 MB)
-                              └─a6a357a48c49 Size: 12.29 kB (virtual 642.2 MB) Tags: ndj/mongodb:latest
 
 .. _cli_import:
 
@@ -752,34 +710,6 @@ preserved.
 	Kernel Version: 3.8.0-33-generic
 	WARNING: No swap limit support
 
-
-.. _cli_insert:
-
-``insert``
-----------
-
-::
-
-    Usage: docker insert IMAGE URL PATH
-
-    Insert a file from URL in the IMAGE at PATH
-
-Use the specified ``IMAGE`` as the parent for a new image which adds a
-:ref:`layer <layer_def>` containing the new file. The ``insert`` command does
-not modify the original image, and the new image has the contents of the parent
-image, plus the new file.
-
-
-Examples
-~~~~~~~~
-
-Insert file from GitHub
-.......................
-
-.. code-block:: bash
-
-    $ sudo docker insert 8283e18b24bc https://raw.github.com/metalivedev/django/master/postinstall /tmp/postinstall.sh
-    06fd35556d7b
 
 .. _cli_inspect:
 
@@ -881,10 +811,32 @@ Known Issues (kill)
 
 ::
 
-    Usage: docker load < repository.tar
+    Usage: docker load 
 
-    Loads a tarred repository from the standard input stream.
-    Restores both images and tags.
+    Load an image from a tar archive on STDIN
+
+      -i, --input="": Read from a tar archive file, instead of STDIN
+
+Loads a tarred repository from a file or the standard input stream.
+Restores both images and tags.
+
+.. code-block:: bash
+
+   $ sudo docker images
+   REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+   $ sudo docker load < busybox.tar
+   $ sudo docker images
+   REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+   busybox             latest              769b9341d937        7 weeks ago         2.489 MB
+   $ sudo docker load --input fedora.tar
+   $ sudo docker images
+   REPOSITORY          TAG                 IMAGE ID            CREATED             VIRTUAL SIZE
+   busybox             latest              769b9341d937        7 weeks ago         2.489 MB
+   fedora              rawhide             0d20aec6529d        7 weeks ago         387 MB
+   fedora              20                  58394af37342        7 weeks ago         385.5 MB
+   fedora              heisenbug           58394af37342        7 weeks ago         385.5 MB
+   fedora              latest              58394af37342        7 weeks ago         385.5 MB
+
 
 .. _cli_login:
 
@@ -985,11 +937,9 @@ The last container is marked as a ``Ghost`` container. It is a container that wa
 
 ::
 
-    Usage: docker pull NAME
+    Usage: docker pull NAME[:TAG]
 
     Pull an image or a repository from the registry
-
-      -t, --tag="": Download tagged image in repository
 
 
 .. _cli_push:
@@ -999,7 +949,7 @@ The last container is marked as a ``Ghost`` container. It is a container that wa
 
 ::
 
-    Usage: docker push NAME
+    Usage: docker push NAME[:TAG]
 
     Push an image or a repository to the registry
 
@@ -1130,6 +1080,7 @@ image is removed.
       --cidfile="": Write the container ID to the file
       -d, --detach=false: Detached mode: Run container in the background, print new container id
       -e, --env=[]: Set environment variables
+      --env-file="": Read in a line delimited file of ENV variables
       -h, --hostname="": Container host name
       -i, --interactive=false: Keep stdin open even if not attached
       --privileged=false: Give extended privileges to this container
@@ -1145,7 +1096,7 @@ image is removed.
       --volumes-from="": Mount all volumes from the given container(s)
       --entrypoint="": Overwrite the default entrypoint set by the image
       -w, --workdir="": Working directory inside the container
-      --lxc-conf=[]: Add custom lxc options --lxc-conf="lxc.cgroup.cpuset.cpus = 0,1"
+      --lxc-conf=[]: (lxc exec-driver only) Add custom lxc options --lxc-conf="lxc.cgroup.cpuset.cpus = 0,1"
       --sig-proxy=true: Proxify all received signal to the process (even in non-tty mode)
       --expose=[]: Expose a port from the container without publishing it to your host
       --link="": Add link to another container (name:alias)
@@ -1264,6 +1215,54 @@ explains in detail how to manipulate ports in Docker.
 
 .. code-block:: bash
 
+    $ sudo docker run -e MYVAR1 --env MYVAR2=foo --env-file ./env.list ubuntu bash
+
+This sets environmental variables in the container. For illustration all three
+flags are shown here. Where ``-e``, ``--env`` take an environment variable and
+value, or if no "=" is provided, then that variable's current value is passed
+through (i.e. $MYVAR1 from the host is set to $MYVAR1 in the container). All
+three flags, ``-e``, ``--env``  and ``--env-file`` can be repeated.
+
+Regardless of the order of these three flags, the ``--env-file`` are processed
+first, and then ``-e``/``--env`` flags. This way, the ``-e`` or ``--env`` will
+override variables as needed.
+
+.. code-block:: bash
+
+    $ cat ./env.list
+    TEST_FOO=BAR
+    $ sudo docker run --env TEST_FOO="This is a test" --env-file ./env.list busybox env | grep TEST_FOO
+    TEST_FOO=This is a test
+
+The ``--env-file`` flag takes a filename as an argument and expects each line
+to be in the VAR=VAL format, mimicking the argument passed to ``--env``.
+Comment lines need only be prefixed with ``#``
+
+An example of a file passed with ``--env-file``
+
+.. code-block:: bash
+
+    $ cat ./env.list
+    TEST_FOO=BAR
+
+    # this is a comment
+    TEST_APP_DEST_HOST=10.10.0.127
+    TEST_APP_DEST_PORT=8888
+
+    # pass through this variable from the caller
+    TEST_PASSTHROUGH
+    $ sudo TEST_PASSTHROUGH=howdy docker run --env-file ./env.list busybox env
+    HOME=/
+    PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+    HOSTNAME=5198e0745561
+    TEST_FOO=BAR
+    TEST_APP_DEST_HOST=10.10.0.127
+    TEST_APP_DEST_PORT=8888
+    TEST_PASSTHROUGH=howdy
+
+
+.. code-block:: bash
+
     $ sudo docker run --name console -t -i ubuntu bash
 
 This will create and run a new container with the container name
@@ -1289,6 +1288,35 @@ list or by repetitions of the ``--volumes-from`` argument. The container
 ID may be optionally suffixed with ``:ro`` or ``:rw`` to mount the volumes in
 read-only or read-write mode, respectively. By default, the volumes are mounted
 in the same mode (read write or read only) as the reference container.
+
+The ``-a`` flag tells ``docker run`` to bind to the container's stdin, stdout
+or stderr. This makes it possible to manipulate the output and input as needed.
+
+.. code-block:: bash
+
+   $ sudo echo "test" | docker run -i -a stdin ubuntu cat -
+
+This pipes data into a container and prints the container's ID by attaching
+only to the container's stdin.
+
+.. code-block:: bash
+
+   $ sudo docker run -a stderr ubuntu echo test
+
+This isn't going to print anything unless there's an error because we've only
+attached to the stderr of the container. The container's logs still store
+what's been written to stderr and stdout.
+
+.. code-block:: bash
+
+   $ sudo cat somefile | docker run -i -a stdin mybuilder dobuild
+
+This is how piping a file into a container could be done for a build.
+The container's ID will be printed after the build is done and the build logs
+could be retrieved using ``docker logs``. This is useful if you need to pipe
+a file or something else into a container and retrieve the container's ID once
+the container has finished running.
+
 
 A complete example
 ..................
@@ -1317,10 +1345,27 @@ This example shows 5 containers that might be set up to test a web application c
 
 ::
 
-    Usage: docker save image > repository.tar
+    Usage: docker save IMAGE
 
-    Streams a tarred repository to the standard output stream.
-    Contains all parent layers, and all tags + versions.
+    Save an image to a tar archive (streamed to stdout by default)
+
+      -o, --output="": Write to an file, instead of STDOUT
+
+
+Produces a tarred repository to the standard output stream.
+Contains all parent layers, and all tags + versions, or specified repo:tag.
+
+.. code-block:: bash
+
+   $ sudo docker save busybox > busybox.tar
+   $ ls -sh b.tar
+   2.7M b.tar
+   $ sudo docker save --output busybox.tar busybox
+   $ ls -sh b.tar
+   2.7M b.tar
+   $ sudo docker save -o fedora-all.tar fedora
+   $ sudo docker save -o fedora-latest.tar fedora:latest
+
 
 .. _cli_search:
 
@@ -1360,11 +1405,11 @@ This example shows 5 containers that might be set up to test a web application c
 
     Usage: docker stop [OPTIONS] CONTAINER [CONTAINER...]
 
-    Stop a running container (Send SIGTERM)
+    Stop a running container (Send SIGTERM, and then SIGKILL after grace period)
 
-      -t, --time=10: Number of seconds to wait for the container to stop.
+      -t, --time=10: Number of seconds to wait for the container to stop before killing it.
 
-The main process inside the container will receive SIGTERM.
+The main process inside the container will receive SIGTERM, and after a grace period, SIGKILL
 
 .. _cli_tag:
 

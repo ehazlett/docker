@@ -57,8 +57,9 @@ func init() {
 }
 
 type driver struct {
-	root     string
-	initPath string
+	root             string
+	initPath         string
+	activeContainers map[string]*exec.Cmd
 }
 
 func NewDriver(root, initPath string) (*driver, error) {
@@ -69,18 +70,22 @@ func NewDriver(root, initPath string) (*driver, error) {
 		return nil, err
 	}
 	return &driver{
-		root:     root,
-		initPath: initPath,
+		root:             root,
+		initPath:         initPath,
+		activeContainers: make(map[string]*exec.Cmd),
 	}, nil
 }
 
 func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallback execdriver.StartCallback) (int, error) {
-	if err := d.validateCommand(c); err != nil {
+	// take the Command and populate the libcontainer.Container from it
+	container, err := d.createContainer(c)
+	if err != nil {
 		return -1, err
 	}
+	d.activeContainers[c.ID] = &c.Cmd
+
 	var (
 		term        nsinit.Terminal
-		container   = createContainer(c)
 		factory     = &dockerCommandFactory{c: c, driver: d}
 		stateWriter = &dockerStateWriter{
 			callback: startCallback,
@@ -112,9 +117,39 @@ func (d *driver) Run(c *execdriver.Command, pipes *execdriver.Pipes, startCallba
 }
 
 func (d *driver) Kill(p *execdriver.Command, sig int) error {
-	err := syscall.Kill(p.Process.Pid, syscall.Signal(sig))
+	return syscall.Kill(p.Process.Pid, syscall.Signal(sig))
+}
+
+func (d *driver) Terminate(p *execdriver.Command) error {
+	// lets check the start time for the process
+	started, err := d.readStartTime(p)
+	if err != nil {
+		// if we don't have the data on disk then we can assume the process is gone
+		// because this is only removed after we know the process has stopped
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+
+	currentStartTime, err := system.GetProcessStartTime(p.Process.Pid)
+	if err != nil {
+		return err
+	}
+	if started == currentStartTime {
+		err = syscall.Kill(p.Process.Pid, 9)
+	}
 	d.removeContainerRoot(p.ID)
 	return err
+
+}
+
+func (d *driver) readStartTime(p *execdriver.Command) (string, error) {
+	data, err := ioutil.ReadFile(filepath.Join(d.root, p.ID, "start"))
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
 }
 
 func (d *driver) Info(id string) execdriver.Info {
@@ -181,17 +216,6 @@ func (d *driver) removeContainerRoot(id string) error {
 	return os.RemoveAll(filepath.Join(d.root, id))
 }
 
-func (d *driver) validateCommand(c *execdriver.Command) error {
-	// we need to check the Config of the command to make sure that we
-	// do not have any of the lxc-conf variables
-	for _, conf := range c.Config {
-		if strings.Contains(conf, "lxc") {
-			return fmt.Errorf("%s is not supported by the native driver", conf)
-		}
-	}
-	return nil
-}
-
 func getEnv(key string, env []string) string {
 	for _, pair := range env {
 		parts := strings.Split(pair, "=")
@@ -241,9 +265,9 @@ type dockerStateWriter struct {
 	callback execdriver.StartCallback
 }
 
-func (d *dockerStateWriter) WritePid(pid int) error {
+func (d *dockerStateWriter) WritePid(pid int, started string) error {
 	d.c.ContainerPid = pid
-	err := d.dsw.WritePid(pid)
+	err := d.dsw.WritePid(pid, started)
 	if d.callback != nil {
 		d.callback(d.c)
 	}

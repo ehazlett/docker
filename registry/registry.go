@@ -41,7 +41,10 @@ func pingRegistryEndpoint(endpoint string) (bool, error) {
 		conn.SetDeadline(time.Now().Add(time.Duration(10) * time.Second))
 		return conn, nil
 	}
-	httpTransport := &http.Transport{Dial: httpDial}
+	httpTransport := &http.Transport{
+		Dial:  httpDial,
+		Proxy: http.ProxyFromEnvironment,
+	}
 	client := &http.Client{Transport: httpTransport}
 	resp, err := client.Get(endpoint + "_ping")
 	if err != nil {
@@ -434,11 +437,13 @@ func (r *Registry) PushImageLayerRegistry(imgID string, layer io.Reader, registr
 
 	utils.Debugf("[registry] Calling PUT %s", registry+"images/"+imgID+"/layer")
 
+	tarsumLayer := &utils.TarSum{Reader: layer}
 	h := sha256.New()
-	checksumLayer := &utils.CheckSum{Reader: layer, Hash: h}
-	tarsumLayer := &utils.TarSum{Reader: checksumLayer}
+	h.Write(jsonRaw)
+	h.Write([]byte{'\n'})
+	checksumLayer := &utils.CheckSum{Reader: tarsumLayer, Hash: h}
 
-	req, err := r.reqFactory.NewRequest("PUT", registry+"images/"+imgID+"/layer", tarsumLayer)
+	req, err := r.reqFactory.NewRequest("PUT", registry+"images/"+imgID+"/layer", checksumLayer)
 	if err != nil {
 		return "", "", err
 	}

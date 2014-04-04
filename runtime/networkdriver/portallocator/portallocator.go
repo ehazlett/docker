@@ -18,8 +18,8 @@ type (
 )
 
 var (
+	ErrAllPortsAllocated    = errors.New("all ports are allocated")
 	ErrPortAlreadyAllocated = errors.New("port has already been allocated")
-	ErrPortExceedsRange     = errors.New("port exceeds upper range")
 	ErrUnknownProtocol      = errors.New("unknown protocol")
 )
 
@@ -100,22 +100,30 @@ func ReleaseAll() error {
 }
 
 func registerDynamicPort(ip net.IP, proto string) (int, error) {
-	allocated := defaultAllocatedPorts[proto]
-
-	port := nextPort(proto)
-	if port > EndPortRange {
-		return 0, ErrPortExceedsRange
-	}
 
 	if !equalsDefault(ip) {
 		registerIP(ip)
 
 		ipAllocated := otherAllocatedPorts[ip.String()][proto]
+
+		port, err := findNextPort(proto, ipAllocated)
+		if err != nil {
+			return 0, err
+		}
 		ipAllocated.Push(port)
+		return port, nil
+
 	} else {
+
+		allocated := defaultAllocatedPorts[proto]
+
+		port, err := findNextPort(proto, allocated)
+		if err != nil {
+			return 0, err
+		}
 		allocated.Push(port)
+		return port, nil
 	}
-	return port, nil
 }
 
 func registerSetPort(ip net.IP, proto string, port int) error {
@@ -142,8 +150,23 @@ func equalsDefault(ip net.IP) bool {
 	return ip == nil || ip.Equal(defaultIP)
 }
 
+func findNextPort(proto string, allocated *collections.OrderedIntSet) (int, error) {
+	port := nextPort(proto)
+	startSearchPort := port
+	for allocated.Exists(port) {
+		port = nextPort(proto)
+		if startSearchPort == port {
+			return 0, ErrAllPortsAllocated
+		}
+	}
+	return port, nil
+}
+
 func nextPort(proto string) int {
 	c := currentDynamicPort[proto] + 1
+	if c > EndPortRange {
+		c = BeginPortRange
+	}
 	currentDynamicPort[proto] = c
 	return c
 }

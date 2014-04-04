@@ -110,13 +110,26 @@ func TestAllocateAllPorts(t *testing.T) {
 		}
 	}
 
-	if _, err := RequestPort(defaultIP, "tcp", 0); err != ErrPortExceedsRange {
-		t.Fatalf("Expected error %s got %s", ErrPortExceedsRange, err)
+	if _, err := RequestPort(defaultIP, "tcp", 0); err != ErrAllPortsAllocated {
+		t.Fatalf("Expected error %s got %s", ErrAllPortsAllocated, err)
 	}
 
 	_, err := RequestPort(defaultIP, "udp", 0)
 	if err != nil {
 		t.Fatal(err)
+	}
+
+	// release a port in the middle and ensure we get another tcp port
+	port := BeginPortRange + 5
+	if err := ReleasePort(defaultIP, "tcp", port); err != nil {
+		t.Fatal(err)
+	}
+	newPort, err := RequestPort(defaultIP, "tcp", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if newPort != port {
+		t.Fatalf("Expected port %d got %d", port, newPort)
 	}
 }
 
@@ -180,5 +193,21 @@ func TestPortAllocation(t *testing.T) {
 	}
 	if _, err := RequestPort(ip, "tcp", 80); err != nil {
 		t.Fatal(err)
+	}
+
+	port, err = RequestPort(ip, "tcp", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port2, err := RequestPort(ip, "tcp", port+1)
+	if err != nil {
+		t.Fatal(err)
+	}
+	port3, err := RequestPort(ip, "tcp", 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if port3 == port2 {
+		t.Fatal("Requesting a dynamic port should never allocate a used port")
 	}
 }

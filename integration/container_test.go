@@ -350,7 +350,7 @@ func TestStart(t *testing.T) {
 	if !container.State.IsRunning() {
 		t.Errorf("Container should be running")
 	}
-	if err := container.Start(); err == nil {
+	if err := container.Start(); err != nil {
 		t.Fatalf("A running container should be able to be started")
 	}
 
@@ -385,7 +385,7 @@ func TestCpuShares(t *testing.T) {
 	if !container.State.IsRunning() {
 		t.Errorf("Container should be running")
 	}
-	if err := container.Start(); err == nil {
+	if err := container.Start(); err != nil {
 		t.Fatalf("A running container should be able to be started")
 	}
 
@@ -1553,7 +1553,7 @@ func TestOnlyLoopbackExistsWhenUsingDisableNetworkOption(t *testing.T) {
 	runtime := mkRuntimeFromEngine(eng, t)
 	defer nuke(runtime)
 
-	config, hc, _, err := runconfig.Parse([]string{"-n=false", GetTestImage(runtime).ID, "ip", "addr", "show"}, nil)
+	config, hc, _, err := runconfig.Parse([]string{"-n=false", GetTestImage(runtime).ID, "ip", "addr", "show", "up"}, nil)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -1619,16 +1619,16 @@ func TestPrivilegedCanMount(t *testing.T) {
 	}
 }
 
-func TestPrivilegedCannotMknod(t *testing.T) {
+func TestUnprivilegedCanMknod(t *testing.T) {
 	eng := NewTestEngine(t)
 	runtime := mkRuntimeFromEngine(eng, t)
 	defer runtime.Nuke()
-	if output, _ := runContainer(eng, runtime, []string{"_", "sh", "-c", "mknod /tmp/sda b 8 0 || echo ok"}, t); output != "ok\n" {
-		t.Fatal("Could mknod into secure container")
+	if output, _ := runContainer(eng, runtime, []string{"_", "sh", "-c", "mknod /tmp/sda b 8 0 && echo ok"}, t); output != "ok\n" {
+		t.Fatal("Couldn't mknod into secure container")
 	}
 }
 
-func TestPrivilegedCannotMount(t *testing.T) {
+func TestUnprivilegedCannotMount(t *testing.T) {
 	eng := NewTestEngine(t)
 	runtime := mkRuntimeFromEngine(eng, t)
 	defer runtime.Nuke()

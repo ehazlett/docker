@@ -29,6 +29,12 @@ To run properly, docker needs the following software to be installed at runtime:
 - iptables version 1.4 or later
 - Git version 1.7 or later
 - XZ Utils 4.9 or later
+- a `properly mounted
+  <https://github.com/tianon/cgroupfs-mount/blob/master/cgroupfs-mount>`_
+  cgroupfs hierarchy (having a single, all-encompassing "cgroup" mount point `is
+  <https://github.com/dotcloud/docker/issues/2683>`_ `not
+  <https://github.com/dotcloud/docker/issues/3485>`_ `sufficient
+  <https://github.com/dotcloud/docker/issues/4568>`_)
 
 
 Check kernel dependencies
@@ -36,6 +42,9 @@ Check kernel dependencies
 
 Docker in daemon mode has specific kernel requirements. For details,
 check your distribution in :ref:`installation_list`.
+
+In general, a 3.8 Linux kernel (or higher) is preferred, as some of the 
+prior versions have known issues that are triggered by Docker.
 
 Note that Docker also has a client mode, which can run on virtually
 any Linux kernel (it even builds on OSX!).

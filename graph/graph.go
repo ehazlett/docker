@@ -189,7 +189,7 @@ func (graph *Graph) Register(jsonData []byte, layerData archive.ArchiveReader, i
 	}
 
 	// Create root filesystem in the driver
-	if err := graph.driver.Create(img.ID, img.Parent); err != nil {
+	if err := graph.driver.Create(img.ID, img.Parent, ""); err != nil {
 		return fmt.Errorf("Driver %s failed to create image rootfs %s: %s", graph.driver, img.ID, err)
 	}
 	// Mount the root filesystem so we can apply the diff/layer
@@ -259,6 +259,7 @@ func SetupInitLayer(initLayer string) error {
 		"/etc/hosts":       "file",
 		"/etc/hostname":    "file",
 		"/dev/console":     "file",
+		"/etc/mtab":        "/proc/mounts",
 		// "var/run": "dir",
 		// "var/lock": "dir",
 	} {
@@ -285,6 +286,10 @@ func SetupInitLayer(initLayer string) error {
 						return err
 					}
 					f.Close()
+				default:
+					if err := os.Symlink(typ, path.Join(initLayer, pth)); err != nil {
+						return err
+					}
 				}
 			} else {
 				return err

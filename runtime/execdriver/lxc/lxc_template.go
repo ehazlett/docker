@@ -1,6 +1,7 @@
 package lxc
 
 import (
+	"github.com/dotcloud/docker/pkg/label"
 	"github.com/dotcloud/docker/runtime/execdriver"
 	"strings"
 	"text/template"
@@ -29,6 +30,10 @@ lxc.pts = 1024
 
 # disable the main console
 lxc.console = none
+{{if .ProcessLabel}}
+lxc.se_context = {{ .ProcessLabel}}
+{{end}}
+{{$MOUNTLABEL := .MountLabel}}
 
 # no controlling tty at all
 lxc.tty = 1
@@ -38,6 +43,10 @@ lxc.cgroup.devices.allow = a
 {{else}}
 # no implicit access to devices
 lxc.cgroup.devices.deny = a
+
+# but allow mknod for any device
+lxc.cgroup.devices.allow = c *:* m
+lxc.cgroup.devices.allow = b *:* m
 
 # /dev/null and zero
 lxc.cgroup.devices.allow = c 1:3 rwm
@@ -85,8 +94,8 @@ lxc.mount.entry = sysfs {{escapeFstabSpaces $ROOTFS}}/sys sysfs nosuid,nodev,noe
 lxc.mount.entry = {{.Console}} {{escapeFstabSpaces $ROOTFS}}/dev/console none bind,rw 0 0
 {{end}}
 
-lxc.mount.entry = devpts {{escapeFstabSpaces $ROOTFS}}/dev/pts devpts newinstance,ptmxmode=0666,nosuid,noexec 0 0
-lxc.mount.entry = shm {{escapeFstabSpaces $ROOTFS}}/dev/shm tmpfs size=65536k,nosuid,nodev,noexec 0 0
+lxc.mount.entry = devpts {{escapeFstabSpaces $ROOTFS}}/dev/pts devpts {{formatMountLabel "newinstance,ptmxmode=0666,nosuid,noexec" $MOUNTLABEL}} 0 0
+lxc.mount.entry = shm {{escapeFstabSpaces $ROOTFS}}/dev/shm tmpfs {{formatMountLabel "size=65536k,nosuid,nodev,noexec" $MOUNTLABEL}} 0 0
 
 {{range $value := .Mounts}}
 {{if $value.Writable}}
@@ -118,9 +127,9 @@ lxc.cgroup.cpu.shares = {{.Resources.CpuShares}}
 {{end}}
 {{end}}
 
-{{if .Config}}
-{{range $value := .Config}}
-{{$value}}
+{{if .Config.lxc}}
+{{range $value := .Config.lxc}}
+lxc.{{$value}}
 {{end}}
 {{end}}
 `
@@ -142,11 +151,23 @@ func getMemorySwap(v *execdriver.Resources) int64 {
 	return v.Memory * 2
 }
 
+func getLabel(c map[string][]string, name string) string {
+	label := c["label"]
+	for _, l := range label {
+		parts := strings.SplitN(l, "=", 2)
+		if strings.TrimSpace(parts[0]) == name {
+			return strings.TrimSpace(parts[1])
+		}
+	}
+	return ""
+}
+
 func init() {
 	var err error
 	funcMap := template.FuncMap{
 		"getMemorySwap":     getMemorySwap,
 		"escapeFstabSpaces": escapeFstabSpaces,
+		"formatMountLabel":  label.FormatMountLabel,
 	}
 	LxcTemplateCompiled, err = template.New("lxc").Funcs(funcMap).Parse(LxcTemplate)
 	if err != nil {
