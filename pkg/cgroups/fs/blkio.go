@@ -38,8 +38,7 @@ func (s *blkioGroup) Stats(d *data) (map[string]float64, error) {
 	}
 	for _, param := range params {
 		p := fmt.Sprintf("blkio.%s", param)
-		paramPath := filepath.Join(path, p)
-		f, err := os.Open(paramPath)
+		f, err := os.Open(filepath.Join(path, p))
 		if err != nil {
 			return paramData, err
 		}

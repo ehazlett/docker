@@ -33,8 +33,7 @@ func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 	if err != nil {
 		return paramData, fmt.Errorf("Unable to read %s cgroup param: %s", path, err)
 	}
-	cpuPath := filepath.Join(path, "cpuacct.stat")
-	f, err := os.Open(cpuPath)
+	f, err := os.Open(filepath.Join(path, "cpuacct.stat"))
 	if err != nil {
 		return paramData, err
 	}
@@ -67,8 +66,7 @@ func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 		return paramData, fmt.Errorf("Error parsing cpu stats: %s", err)
 	}
 	// find starttime of process
-	pidProcsPath := filepath.Join(path, "cgroup.procs")
-	pf, err := os.Open(pidProcsPath)
+	pf, err := os.Open(filepath.Join(path, "cgroup.procs"))
 	if err != nil {
 		return paramData, fmt.Errorf("Error parsing cpu stats: %s", err)
 	}

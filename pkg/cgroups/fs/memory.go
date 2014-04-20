@@ -54,8 +54,7 @@ func (s *memoryGroup) Stats(d *data) (map[string]float64, error) {
 		fmt.Errorf("Unable to read %s cgroup param: %s", path, err)
 		return paramData, err
 	}
-	paramPath := filepath.Join(path, "memory.stat")
-	f, err := os.Open(paramPath)
+	f, err := os.Open(filepath.Join(path, "memory.stat"))
 	if err != nil {
 		return paramData, err
 	}
