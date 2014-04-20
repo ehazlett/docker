@@ -1,8 +1,14 @@
 package fs
 
 import (
+	"bufio"
+	"fmt"
 	"os"
+	"path/filepath"
 	"strconv"
+	"strings"
+
+	"github.com/dotcloud/docker/pkg/cgroups"
 )
 
 type memoryGroup struct {
@@ -42,4 +48,26 @@ func (s *memoryGroup) Set(d *data) error {
 
 func (s *memoryGroup) Remove(d *data) error {
 	return removePath(d.path("memory"))
+}
+
+func (s *memoryGroup) Stats() (map[string]float64, error) {
+	paramData := make(map[string]float64)
+	path, _ := cgroups.FindCgroupMountpoint("memory")
+	paramPath := filepath.Join(path, "memory.stat")
+	f, err := os.Open(paramPath)
+	if err != nil {
+		return paramData, err
+	}
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		fields := strings.Fields(sc.Text())
+		t := fields[0]
+		v, err := strconv.Atoi(fields[1])
+		if err != nil {
+			fmt.Errorf("Error parsing %s stats: %s", t, err)
+			continue
+		}
+		paramData[t] = float64(v)
+	}
+	return paramData, nil
 }
