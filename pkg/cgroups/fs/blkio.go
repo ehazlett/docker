@@ -19,6 +19,7 @@ func (s *blkioGroup) Set(d *data) error {
 	if _, err := d.join("blkio"); err != nil && err != cgroups.ErrNotFound {
 		return err
 	}
+	fmt.Println(s.Stats(d))
 	return nil
 }
 
@@ -33,13 +34,14 @@ func (s *blkioGroup) Stats(d *data) (map[string]float64, error) {
 		return paramData, fmt.Errorf("Unable to read %s cgroup param: %s", path, err)
 	}
 	params := []string{
-		"blkio.sectors",
-		"blkio.io_service_bytes",
-		"blkio.io_serviced",
-		"blkio.io_queued",
+		"sectors",
+		"io_service_bytes",
+		"io_serviced",
+		"io_queued",
 	}
 	for _, param := range params {
-		paramPath := filepath.Join(path, param)
+		p := fmt.Sprintf("blkio.%s", param)
+		paramPath := filepath.Join(path, p)
 		f, err := os.Open(paramPath)
 		if err != nil {
 			return paramData, err
@@ -53,12 +55,7 @@ func (s *blkioGroup) Stats(d *data) (map[string]float64, error) {
 				fmt.Printf("Error parsing %s stats: %s", param, err)
 				continue
 			}
-			paramParts := strings.Split(param, ".")
-			switch len(paramParts) {
-			case 2:
-				paramName := paramParts[1]
-				paramData[paramName] = v
-			}
+			paramData[param] = v
 		}
 	}
 	return paramData, nil

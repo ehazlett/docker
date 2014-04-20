@@ -60,10 +60,12 @@ func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 		return paramData, fmt.Errorf("Unable to open /proc/uptime")
 	}
 	defer uf.Close()
-	uptimeData, _ := ioutil.ReadAll(uf)
+	uptimeData, err := ioutil.ReadAll(uf)
+	if err != nil {
+		return paramData, fmt.Errorf("Error reading /proc/uptime: %s", err)
+	}
 	uptimeFields := strings.Fields(string(uptimeData))
-	uptimeFloat, err := strconv.ParseFloat(uptimeFields[0], 64)
-	uptime := int(uptimeFloat)
+	uptime, err := strconv.ParseFloat(uptimeFields[0], 64)
 	if err != nil {
 		return paramData, fmt.Errorf("Error parsing cpu stats: %s", err)
 	}
@@ -75,8 +77,14 @@ func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 	}
 	defer pf.Close()
 	pr := bufio.NewReader(pf)
-	l, _, _ := pr.ReadLine()
-	starttime, _ := strconv.Atoi(string(l))
+	l, _, err := pr.ReadLine()
+	if err != nil {
+		return paramData, fmt.Errorf("Error reading param file: %s", err)
+	}
+	starttime, err := strconv.ParseFloat(string(l), 64)
+	if err != nil {
+		return paramData, fmt.Errorf("Unable to parse starttime: %s", err)
+	}
 	// get total elapsed seconds since proc start
 	seconds := uptime - (starttime / 100)
 	// finally calc percentage
