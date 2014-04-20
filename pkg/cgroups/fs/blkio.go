@@ -5,8 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strconv"
-	"strings"
 
 	"github.com/dotcloud/docker/pkg/cgroups"
 )
@@ -19,7 +17,6 @@ func (s *blkioGroup) Set(d *data) error {
 	if _, err := d.join("blkio"); err != nil && err != cgroups.ErrNotFound {
 		return err
 	}
-	fmt.Println(s.Stats(d))
 	return nil
 }
 
@@ -49,11 +46,9 @@ func (s *blkioGroup) Stats(d *data) (map[string]float64, error) {
 		defer f.Close()
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
-			fields := strings.Fields(sc.Text())
-			v, err := strconv.ParseFloat(fields[1], 64)
+			_, v, err := getCgroupParamKeyValue(sc.Text())
 			if err != nil {
-				fmt.Printf("Error parsing %s stats: %s", param, err)
-				continue
+				return paramData, fmt.Errorf("Error parsing param data: %s", err)
 			}
 			paramData[param] = v
 		}

@@ -6,7 +6,6 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
-	"strings"
 )
 
 type memoryGroup struct {
@@ -63,12 +62,9 @@ func (s *memoryGroup) Stats(d *data) (map[string]float64, error) {
 	defer f.Close()
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
-		fields := strings.Fields(sc.Text())
-		t := fields[0]
-		v, err := strconv.ParseFloat(fields[1], 64)
+		t, v, err := getCgroupParamKeyValue(sc.Text())
 		if err != nil {
-			fmt.Errorf("Error parsing %s stats: %s", t, err)
-			continue
+			return paramData, fmt.Errorf("Error parsing param data: %s", err)
 		}
 		paramData[t] = v
 	}

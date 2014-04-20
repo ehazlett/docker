@@ -42,15 +42,12 @@ func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 	sc := bufio.NewScanner(f)
 	cpuTotal := 0.0
 	for sc.Scan() {
-		fields := strings.Fields(sc.Text())
-		t := fields[0]
-		v, err := strconv.ParseFloat(fields[1], 64)
+		t, v, err := getCgroupParamKeyValue(sc.Text())
 		if err != nil {
-			fmt.Printf("Error parsing cpu stats: %s", err)
-			continue
+			return paramData, fmt.Errorf("Error parsing param data: %s", err)
 		}
 		// set the raw data in map
-		paramData[t] = float64(v)
+		paramData[t] = v
 		cpuTotal += v
 	}
 	// calculate percentage from jiffies
