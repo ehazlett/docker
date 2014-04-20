@@ -31,8 +31,7 @@ func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 	paramData := make(map[string]float64)
 	path, err := d.path("cpuacct")
 	if err != nil {
-		fmt.Errorf("Unable to read %s cgroup param: %s", path, err)
-		return paramData, err
+		return paramData, fmt.Errorf("Unable to read %s cgroup param: %s", path, err)
 	}
 	cpuPath := filepath.Join(path, "cpuacct.stat")
 	f, err := os.Open(cpuPath)
@@ -47,7 +46,7 @@ func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 		t := fields[0]
 		v, err := strconv.ParseFloat(fields[1], 64)
 		if err != nil {
-			fmt.Errorf("Error parsing cpu stats: %s", err)
+			fmt.Printf("Error parsing cpu stats: %s", err)
 			continue
 		}
 		// set the raw data in map
@@ -58,8 +57,7 @@ func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 	// get sys uptime
 	uf, err := os.Open("/proc/uptime")
 	if err != nil {
-		fmt.Errorf("Unable to open /proc/uptime")
-		return paramData, err
+		return paramData, fmt.Errorf("Unable to open /proc/uptime")
 	}
 	defer uf.Close()
 	uptimeData, _ := ioutil.ReadAll(uf)
@@ -67,15 +65,13 @@ func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 	uptimeFloat, err := strconv.ParseFloat(uptimeFields[0], 64)
 	uptime := int(uptimeFloat)
 	if err != nil {
-		fmt.Errorf("Error parsing cpu stats: %s", err)
-		return paramData, err
+		return paramData, fmt.Errorf("Error parsing cpu stats: %s", err)
 	}
 	// find starttime of process
 	pidProcsPath := filepath.Join(path, "cgroup.procs")
 	pf, err := os.Open(pidProcsPath)
 	if err != nil {
-		fmt.Errorf("Error parsing cpu stats: %s", err)
-		return paramData, err
+		return paramData, fmt.Errorf("Error parsing cpu stats: %s", err)
 	}
 	defer pf.Close()
 	pr := bufio.NewReader(pf)

@@ -30,8 +30,7 @@ func (s *blkioGroup) Stats(d *data) (map[string]float64, error) {
 	paramData := make(map[string]float64)
 	path, err := d.path("blkio")
 	if err != nil {
-		fmt.Errorf("Unable to read %s cgroup param: %s", path, err)
-		return paramData, err
+		return paramData, fmt.Errorf("Unable to read %s cgroup param: %s", path, err)
 	}
 	params := []string{
 		"blkio.sectors",
@@ -51,7 +50,7 @@ func (s *blkioGroup) Stats(d *data) (map[string]float64, error) {
 			fields := strings.Fields(sc.Text())
 			v, err := strconv.ParseFloat(fields[1], 64)
 			if err != nil {
-				fmt.Errorf("Error parsing %s stats: %s", param, err)
+				fmt.Printf("Error parsing %s stats: %s", param, err)
 				continue
 			}
 			paramParts := strings.Split(param, ".")
