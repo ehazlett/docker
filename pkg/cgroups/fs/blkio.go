@@ -26,9 +26,9 @@ func (s *blkioGroup) Remove(d *data) error {
 	return removePath(d.path("blkio"))
 }
 
-func (s *blkioGroup) Stats() (map[string]float64, error) {
+func (s *blkioGroup) Stats(d *data) (map[string]float64, error) {
 	paramData := make(map[string]float64)
-	path, _ := cgroups.FindCgroupMountpoint("blkio")
+	path, _ := d.path("blkio")
 	params := []string{
 		"blkio.sectors",
 		"blkio.io_service_bytes",

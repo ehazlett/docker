@@ -27,9 +27,9 @@ func (s *cpuacctGroup) Remove(d *data) error {
 	return removePath(d.path("cpuacct"))
 }
 
-func (s *cpuacctGroup) Stats() (map[string]float64, error) {
+func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 	cpu := make(map[string]float64)
-	path, _ := cgroups.FindCgroupMountpoint("cpuacct")
+	path, _ := d.path("cpuacct")
 	cpuPath := filepath.Join(path, "cpuacct.stat")
 	f, err := os.Open(cpuPath)
 	if err != nil {

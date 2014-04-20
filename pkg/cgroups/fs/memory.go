@@ -7,8 +7,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-
-	"github.com/dotcloud/docker/pkg/cgroups"
 )
 
 type memoryGroup struct {
@@ -50,9 +48,9 @@ func (s *memoryGroup) Remove(d *data) error {
 	return removePath(d.path("memory"))
 }
 
-func (s *memoryGroup) Stats() (map[string]float64, error) {
+func (s *memoryGroup) Stats(d *data) (map[string]float64, error) {
 	paramData := make(map[string]float64)
-	path, _ := cgroups.FindCgroupMountpoint("memory")
+	path, _ := d.path("memory")
 	paramPath := filepath.Join(path, "memory.stat")
 	f, err := os.Open(paramPath)
 	if err != nil {
