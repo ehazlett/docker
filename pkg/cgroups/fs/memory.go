@@ -57,10 +57,10 @@ func (s *memoryGroup) Stats(d *data) (map[string]float64, error) {
 	}
 	paramPath := filepath.Join(path, "memory.stat")
 	f, err := os.Open(paramPath)
-	defer f.Close()
 	if err != nil {
 		return paramData, err
 	}
+	defer f.Close()
 	sc := bufio.NewScanner(f)
 	for sc.Scan() {
 		fields := strings.Fields(sc.Text())

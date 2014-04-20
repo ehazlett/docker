@@ -42,10 +42,10 @@ func (s *blkioGroup) Stats(d *data) (map[string]float64, error) {
 	for _, param := range params {
 		paramPath := filepath.Join(path, param)
 		f, err := os.Open(paramPath)
-		defer f.Close()
 		if err != nil {
 			return paramData, err
 		}
+		defer f.Close()
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
 			fields := strings.Fields(sc.Text())

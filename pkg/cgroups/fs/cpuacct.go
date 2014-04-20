@@ -36,10 +36,10 @@ func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 	}
 	cpuPath := filepath.Join(path, "cpuacct.stat")
 	f, err := os.Open(cpuPath)
-	defer f.Close()
 	if err != nil {
 		return paramData, err
 	}
+	defer f.Close()
 	sc := bufio.NewScanner(f)
 	cpuTotal := 0.0
 	for sc.Scan() {
@@ -57,11 +57,11 @@ func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 	// calculate percentage from jiffies
 	// get sys uptime
 	uf, err := os.Open("/proc/uptime")
-	defer uf.Close()
 	if err != nil {
 		fmt.Errorf("Unable to open /proc/uptime")
 		return paramData, err
 	}
+	defer uf.Close()
 	uptimeData, _ := ioutil.ReadAll(uf)
 	uptimeFields := strings.Fields(string(uptimeData))
 	uptimeFloat, err := strconv.ParseFloat(uptimeFields[0], 64)
@@ -72,7 +72,11 @@ func (s *cpuacctGroup) Stats(d *data) (map[string]float64, error) {
 	}
 	// find starttime of process
 	pidProcsPath := filepath.Join(path, "cgroup.procs")
-	pf, _ := os.Open(pidProcsPath)
+	pf, err := os.Open(pidProcsPath)
+	if err != nil {
+		fmt.Errorf("Error parsing cpu stats: %s", err)
+		return paramData, err
+	}
 	defer pf.Close()
 	pr := bufio.NewReader(pf)
 	l, _, _ := pr.ReadLine()
