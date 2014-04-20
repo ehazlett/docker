@@ -28,7 +28,11 @@ func (s *blkioGroup) Remove(d *data) error {
 
 func (s *blkioGroup) Stats(d *data) (map[string]float64, error) {
 	paramData := make(map[string]float64)
-	path, _ := d.path("blkio")
+	path, err := d.path("blkio")
+	if err != nil {
+		fmt.Errorf("Unable to read %s cgroup param: %s", path, err)
+		return paramData, err
+	}
 	params := []string{
 		"blkio.sectors",
 		"blkio.io_service_bytes",
@@ -38,19 +42,24 @@ func (s *blkioGroup) Stats(d *data) (map[string]float64, error) {
 	for _, param := range params {
 		paramPath := filepath.Join(path, param)
 		f, err := os.Open(paramPath)
+		defer f.Close()
 		if err != nil {
 			return paramData, err
 		}
 		sc := bufio.NewScanner(f)
 		for sc.Scan() {
 			fields := strings.Fields(sc.Text())
-			v, err := strconv.Atoi(fields[1])
+			v, err := strconv.ParseFloat(fields[1], 64)
 			if err != nil {
 				fmt.Errorf("Error parsing %s stats: %s", param, err)
 				continue
 			}
-			paramName := strings.Split(param, ".")[1]
-			paramData[paramName] = float64(v)
+			paramParts := strings.Split(param, ".")
+			switch len(paramParts) {
+			case 2:
+				paramName := paramParts[1]
+				paramData[paramName] = v
+			}
 		}
 	}
 	return paramData, nil

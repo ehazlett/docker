@@ -50,9 +50,14 @@ func (s *memoryGroup) Remove(d *data) error {
 
 func (s *memoryGroup) Stats(d *data) (map[string]float64, error) {
 	paramData := make(map[string]float64)
-	path, _ := d.path("memory")
+	path, err := d.path("memory")
+	if err != nil {
+		fmt.Errorf("Unable to read %s cgroup param: %s", path, err)
+		return paramData, err
+	}
 	paramPath := filepath.Join(path, "memory.stat")
 	f, err := os.Open(paramPath)
+	defer f.Close()
 	if err != nil {
 		return paramData, err
 	}
@@ -60,12 +65,12 @@ func (s *memoryGroup) Stats(d *data) (map[string]float64, error) {
 	for sc.Scan() {
 		fields := strings.Fields(sc.Text())
 		t := fields[0]
-		v, err := strconv.Atoi(fields[1])
+		v, err := strconv.ParseFloat(fields[1], 64)
 		if err != nil {
 			fmt.Errorf("Error parsing %s stats: %s", t, err)
 			continue
 		}
-		paramData[t] = float64(v)
+		paramData[t] = v
 	}
 	return paramData, nil
 }
