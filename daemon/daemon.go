@@ -804,7 +804,7 @@ func NewDaemon(config *Config, registryService *registry.Service) (daemon *Daemo
 		return nil, fmt.Errorf("invalid cluster configuration. --cluster-advertise must be accompanied by --cluster-store configuration")
 	}
 
-	d.netController, err = d.initNetworkController(config)
+	d.netController, err = d.initNetworkController(config, eventsService)
 	if err != nil {
 		return nil, fmt.Errorf("Error initializing network controller: %v", err)
 	}

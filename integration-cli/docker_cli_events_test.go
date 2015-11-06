@@ -77,8 +77,8 @@ func (s *DockerSuite) TestEventsContainerFailStartDie(c *check.C) {
 	events := strings.Split(out, "\n")
 	c.Assert(len(events), checker.GreaterThan, 1) //Missing expected event
 
-	startEvent := strings.Fields(events[len(events)-3])
-	dieEvent := strings.Fields(events[len(events)-2])
+	startEvent := strings.Fields(events[len(events)-4])
+	dieEvent := strings.Fields(events[len(events)-3])
 
 	c.Assert(startEvent[len(startEvent)-1], checker.Equals, "start", check.Commentf("event should be start, not %#v", startEvent))
 	c.Assert(dieEvent[len(dieEvent)-1], checker.Equals, "die", check.Commentf("event should be die, not %#v", dieEvent))
@@ -121,15 +121,18 @@ func (s *DockerSuite) TestEventsContainerEvents(c *check.C) {
 	c.Assert(len(events), checker.GreaterOrEqualThan, 5) //Missing expected event
 	createEvent := strings.Fields(events[len(events)-5])
 	attachEvent := strings.Fields(events[len(events)-4])
+	connectEvent := strings.Fields(events[len(events)-5])
 	startEvent := strings.Fields(events[len(events)-3])
 	dieEvent := strings.Fields(events[len(events)-2])
+	disconnectEvent := strings.Fields(events[len(events)-2])
 	destroyEvent := strings.Fields(events[len(events)-1])
 	c.Assert(createEvent[len(createEvent)-1], checker.Equals, "create", check.Commentf("event should be create, not %#v", createEvent))
 	c.Assert(attachEvent[len(attachEvent)-1], checker.Equals, "attach", check.Commentf("event should be attach, not %#v", attachEvent))
+	c.Assert(connectEvent[len(connectEvent)-1], checker.Equals, "connect", check.Commentf("event should be connect, not %#v", connectEvent))
 	c.Assert(startEvent[len(startEvent)-1], checker.Equals, "start", check.Commentf("event should be start, not %#v", startEvent))
 	c.Assert(dieEvent[len(dieEvent)-1], checker.Equals, "die", check.Commentf("event should be die, not %#v", dieEvent))
+	c.Assert(disconnectEvent[len(disconnectEvent)-1], checker.Equals, "disconnect", check.Commentf("event should be disconnect, not %#v", disconnectEvent))
 	c.Assert(destroyEvent[len(destroyEvent)-1], checker.Equals, "destroy", check.Commentf("event should be destroy, not %#v", destroyEvent))
-
 }
 
 func (s *DockerSuite) TestEventsContainerEventsSinceUnixEpoch(c *check.C) {
@@ -144,15 +147,18 @@ func (s *DockerSuite) TestEventsContainerEventsSinceUnixEpoch(c *check.C) {
 	c.Assert(len(events), checker.GreaterOrEqualThan, 5) //Missing expected event
 	createEvent := strings.Fields(events[len(events)-5])
 	attachEvent := strings.Fields(events[len(events)-4])
+	connectEvent := strings.Fields(events[len(events)-5])
 	startEvent := strings.Fields(events[len(events)-3])
 	dieEvent := strings.Fields(events[len(events)-2])
+	disconnectEvent := strings.Fields(events[len(events)-2])
 	destroyEvent := strings.Fields(events[len(events)-1])
 	c.Assert(createEvent[len(createEvent)-1], checker.Equals, "create", check.Commentf("event should be create, not %#v", createEvent))
 	c.Assert(attachEvent[len(attachEvent)-1], checker.Equals, "attach", check.Commentf("event should be attach, not %#v", attachEvent))
+	c.Assert(connectEvent[len(connectEvent)-1], checker.Equals, "connect", check.Commentf("event should be connect, not %#v", connectEvent))
 	c.Assert(startEvent[len(startEvent)-1], checker.Equals, "start", check.Commentf("event should be start, not %#v", startEvent))
 	c.Assert(dieEvent[len(dieEvent)-1], checker.Equals, "die", check.Commentf("event should be die, not %#v", dieEvent))
+	c.Assert(disconnectEvent[len(disconnectEvent)-1], checker.Equals, "disconnect", check.Commentf("event should be disconnect, not %#v", disconnectEvent))
 	c.Assert(destroyEvent[len(destroyEvent)-1], checker.Equals, "destroy", check.Commentf("event should be destroy, not %#v", destroyEvent))
-
 }
 
 func (s *DockerSuite) TestEventsImageUntagDelete(c *check.C) {

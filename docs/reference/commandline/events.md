@@ -23,9 +23,13 @@ Docker containers will report the following events:
 
     attach, commit, copy, create, destroy, die, exec_create, exec_start, export, kill, oom, pause, rename, resize, restart, start, stop, top, unpause
 
-and Docker images will report:
+Docker images will report:
 
     delete, import, pull, push, tag, untag
+    
+And Docker networks will report:
+
+	create, connect, disconnect, delete
 
 The `--since` and `--until` parameters can be Unix timestamps, date formated
 timestamps, or Go duration strings (e.g. `10m`, `1h30m`) computed

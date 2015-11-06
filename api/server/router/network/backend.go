@@ -16,8 +16,9 @@ type Backend interface {
 	GetNetworksByID(partialID string) []libnetwork.Network
 	CreateNetwork(name, driver string, ipam network.IPAM,
 		options map[string]string) (libnetwork.Network, error)
-	ConnectContainerToNetwork(containerName, networkName string) error
+	ConnectContainerToNetwork(containerName string, network libnetwork.Network) error
 	DisconnectContainerFromNetwork(containerName string,
 		network libnetwork.Network) error
+	DeleteNetwork(network libnetwork.Network) error
 	NetworkControllerEnabled() bool
 }

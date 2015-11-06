@@ -101,7 +101,13 @@ func (daemon *Daemon) CreateNetwork(name, driver string, ipam network.IPAM, opti
 
 	nwOptions = append(nwOptions, libnetwork.NetworkOptionIpam(ipam.Driver, "", v4Conf, v6Conf))
 	nwOptions = append(nwOptions, libnetwork.NetworkOptionDriverOpts(options))
-	return c.NewNetwork(driver, name, nwOptions...)
+
+	network, err := c.NewNetwork(driver, name, nwOptions...)
+	if err != nil {
+		return nil, err
+	}
+	daemon.LogNetworkEvent(network, "create")
+	return network, err
 }
 
 func getIpamConfig(data []network.IPAMConfig) ([]*libnetwork.IpamConf, []*libnetwork.IpamConf, error) {
@@ -129,12 +135,12 @@ func getIpamConfig(data []network.IPAMConfig) ([]*libnetwork.IpamConf, []*libnet
 // ConnectContainerToNetwork connects the given container to the given
 // network. If either cannot be found, an err is returned. If the
 // network cannot be set up, an err is returned.
-func (daemon *Daemon) ConnectContainerToNetwork(containerName, networkName string) error {
+func (daemon *Daemon) ConnectContainerToNetwork(containerName string, network libnetwork.Network) error {
 	container, err := daemon.Get(containerName)
 	if err != nil {
 		return err
 	}
-	return daemon.ConnectToNetwork(container, networkName)
+	return daemon.ConnectToNetwork(container, network.ID())
 }
 
 // DisconnectContainerFromNetwork disconnects the given container from
@@ -144,7 +150,17 @@ func (daemon *Daemon) DisconnectContainerFromNetwork(containerName string, netwo
 	if err != nil {
 		return err
 	}
+	daemon.LogNetworkEvent(network, fmt.Sprintf("%s - disconnect", container.ID))
 	return daemon.DisconnectFromNetwork(container, network)
+}
+
+// DeleteNetwork deletes the passed network
+func (daemon *Daemon) DeleteNetwork(network libnetwork.Network) error {
+	if err := network.Delete(); err != nil {
+		return err
+	}
+	daemon.LogNetworkEvent(network, "delete")
+	return nil
 }
 
 // GetNetworkDriverList returns the list of plugins drivers

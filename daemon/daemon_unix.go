@@ -13,6 +13,7 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/container"
+	"github.com/docker/docker/daemon/events"
 	"github.com/docker/docker/daemon/graphdriver"
 	derr "github.com/docker/docker/errors"
 	"github.com/docker/docker/image"
@@ -404,7 +405,7 @@ func (daemon *Daemon) networkOptions(dconfig *Config) ([]nwconfig.Option, error)
 	return options, nil
 }
 
-func (daemon *Daemon) initNetworkController(config *Config) (libnetwork.NetworkController, error) {
+func (daemon *Daemon) initNetworkController(config *Config, eventLogger *events.Events) (libnetwork.NetworkController, error) {
 	netOptions, err := daemon.networkOptions(config)
 	if err != nil {
 		return nil, err
@@ -416,20 +417,26 @@ func (daemon *Daemon) initNetworkController(config *Config) (libnetwork.NetworkC
 	}
 
 	// Initialize default network on "null"
-	if _, err := controller.NewNetwork("null", "none", libnetwork.NetworkOptionPersist(false)); err != nil {
+	network, err := controller.NewNetwork("null", "none", libnetwork.NetworkOptionPersist(false))
+	if err != nil {
 		return nil, fmt.Errorf("Error creating default \"null\" network: %v", err)
 	}
+	eventLogger.Log("create", network.ID(), network.Type())
 
 	// Initialize default network on "host"
-	if _, err := controller.NewNetwork("host", "host", libnetwork.NetworkOptionPersist(false)); err != nil {
+	network, err = controller.NewNetwork("host", "host", libnetwork.NetworkOptionPersist(false))
+	if err != nil {
 		return nil, fmt.Errorf("Error creating default \"host\" network: %v", err)
 	}
+	eventLogger.Log("create", network.ID(), network.Type())
 
 	if !config.DisableBridge {
 		// Initialize default driver "bridge"
-		if err := initBridgeDriver(controller, config); err != nil {
+		network, err := initBridgeDriver(controller, config)
+		if err != nil {
 			return nil, err
 		}
+		eventLogger.Log("create", network.ID(), network.Type())
 	}
 
 	return controller, nil
@@ -447,10 +454,10 @@ func driverOptions(config *Config) []nwconfig.Option {
 	return dOptions
 }
 
-func initBridgeDriver(controller libnetwork.NetworkController, config *Config) error {
+func initBridgeDriver(controller libnetwork.NetworkController, config *Config) (libnetwork.Network, error) {
 	if n, err := controller.NetworkByName("bridge"); err == nil {
 		if err = n.Delete(); err != nil {
-			return fmt.Errorf("could not delete the default bridge network: %v", err)
+			return nil, fmt.Errorf("could not delete the default bridge network: %v", err)
 		}
 	}
 
@@ -487,7 +494,7 @@ func initBridgeDriver(controller libnetwork.NetworkController, config *Config) e
 		ipamV4Conf.PreferredPool = config.Bridge.IP
 		ip, _, err := net.ParseCIDR(config.Bridge.IP)
 		if err != nil {
-			return err
+			return nil, err
 		}
 		ipamV4Conf.Gateway = ip.String()
 	} else if bridgeName == bridge.DefaultBridgeName && ipamV4Conf.PreferredPool != "" {
@@ -497,7 +504,7 @@ func initBridgeDriver(controller libnetwork.NetworkController, config *Config) e
 	if config.Bridge.FixedCIDR != "" {
 		_, fCIDR, err := net.ParseCIDR(config.Bridge.FixedCIDR)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		ipamV4Conf.SubPool = fCIDR.String()
@@ -514,7 +521,7 @@ func initBridgeDriver(controller libnetwork.NetworkController, config *Config) e
 	if config.Bridge.FixedCIDRv6 != "" {
 		_, fCIDRv6, err := net.ParseCIDR(config.Bridge.FixedCIDRv6)
 		if err != nil {
-			return err
+			return nil, err
 		}
 
 		// In case user has specified the daemon flag --fixed-cidr-v6 and the passed network has
@@ -545,7 +552,7 @@ func initBridgeDriver(controller libnetwork.NetworkController, config *Config) e
 		v6Conf = append(v6Conf, ipamV6Conf)
 	}
 	// Initialize default network on "bridge" with the same name
-	_, err := controller.NewNetwork("bridge", "bridge",
+	n, err := controller.NewNetwork("bridge", "bridge",
 		libnetwork.NetworkOptionGeneric(options.Generic{
 			netlabel.GenericData: netOption,
 			netlabel.EnableIPv6:  config.Bridge.EnableIPv6,
@@ -553,9 +560,9 @@ func initBridgeDriver(controller libnetwork.NetworkController, config *Config) e
 		libnetwork.NetworkOptionIpam("default", "", v4Conf, v6Conf),
 		libnetwork.NetworkOptionDeferIPv6Alloc(deferIPv6Alloc))
 	if err != nil {
-		return fmt.Errorf("Error creating default \"bridge\" network: %v", err)
+		return nil, fmt.Errorf("Error creating default \"bridge\" network: %v", err)
 	}
-	return nil
+	return n, nil
 }
 
 // setupInitLayer populates a directory with mountpoints suitable

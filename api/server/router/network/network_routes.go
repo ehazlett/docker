@@ -128,7 +128,7 @@ func (n *networkRouter) postNetworkConnect(ctx context.Context, w http.ResponseW
 		return err
 	}
 
-	return n.backend.ConnectContainerToNetwork(connect.Container, nw.Name())
+	return n.backend.ConnectContainerToNetwork(connect.Container, nw)
 }
 
 func (n *networkRouter) postNetworkDisconnect(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -168,7 +168,7 @@ func (n *networkRouter) deleteNetwork(ctx context.Context, w http.ResponseWriter
 			fmt.Sprintf("%s is a pre-defined network and cannot be removed", nw.Name()))
 	}
 
-	return nw.Delete()
+	return n.backend.DeleteNetwork(nw)
 }
 
 func buildNetworkResource(nw libnetwork.Network) *types.NetworkResource {
