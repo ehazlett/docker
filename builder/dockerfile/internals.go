@@ -76,11 +76,22 @@ func (b *Builder) commit(id string, autoCmd strslice.StrSlice, comment string) e
 		Config: &autoConfig,
 	}
 
+	// merge labels
+	logrus.Debugf("[BUILDER] setting labels %v", b.options.Labels)
+	for kL, vL := range b.options.Labels {
+		if _, ok := commitCfg.Config.Labels[kL]; ok {
+			commitCfg.Config.Labels[kL] = vL
+		} else {
+			commitCfg.Config.Labels[kL] = vL
+		}
+	}
+
 	// Commit the container
 	imageID, err := b.docker.Commit(id, commitCfg)
 	if err != nil {
 		return err
 	}
+
 	b.image = imageID
 	return nil
 }
