@@ -399,6 +399,7 @@ type NetworkResource struct {
 	Internal   bool
 	Containers map[string]EndpointResource
 	Options    map[string]string
+	Labels     map[string]string
 }
 
 // EndpointResource contains network resources allocated and used for a container in a network
@@ -419,6 +420,7 @@ type NetworkCreate struct {
 	IPAM           network.IPAM
 	Internal       bool
 	Options        map[string]string
+	Labels         map[string]string
 }
 
 // NetworkCreateResponse is the response message sent by the server for network create call
