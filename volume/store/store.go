@@ -13,9 +13,10 @@ import (
 // reference counting of volumes in the system.
 func New() *VolumeStore {
 	return &VolumeStore{
-		locks: &locker.Locker{},
-		names: make(map[string]volume.Volume),
-		refs:  make(map[string][]string),
+		locks:  &locker.Locker{},
+		names:  make(map[string]volume.Volume),
+		refs:   make(map[string][]string),
+		labels: make(map[string]map[string]string),
 	}
 }
 
@@ -39,6 +40,7 @@ func (s *VolumeStore) purge(name string) {
 	s.globalLock.Lock()
 	delete(s.names, name)
 	delete(s.refs, name)
+	delete(s.labels, name)
 	s.globalLock.Unlock()
 }
 
@@ -51,6 +53,8 @@ type VolumeStore struct {
 	names map[string]volume.Volume
 	// refs stores the volume name and the list of things referencing it
 	refs map[string][]string
+	// labels stores volume labels for each volume
+	labels map[string]map[string]string
 }
 
 // List proxies to all registered volume drivers to get the full list of volumes
@@ -137,12 +141,12 @@ func (s *VolumeStore) list() ([]volume.Volume, []string, error) {
 // CreateWithRef creates a volume with the given name and driver and stores the ref
 // This is just like Create() except we store the reference while holding the lock.
 // This ensures there's no race between creating a volume and then storing a reference.
-func (s *VolumeStore) CreateWithRef(name, driverName, ref string, opts map[string]string) (volume.Volume, error) {
+func (s *VolumeStore) CreateWithRef(name, driverName, ref string, opts, labels map[string]string) (volume.Volume, error) {
 	name = normaliseVolumeName(name)
 	s.locks.Lock(name)
 	defer s.locks.Unlock(name)
 
-	v, err := s.create(name, driverName, opts)
+	v, err := s.create(name, driverName, opts, labels)
 	if err != nil {
 		return nil, &OpErr{Err: err, Name: name, Op: "create"}
 	}
@@ -152,12 +156,12 @@ func (s *VolumeStore) CreateWithRef(name, driverName, ref string, opts map[strin
 }
 
 // Create creates a volume with the given name and driver.
-func (s *VolumeStore) Create(name, driverName string, opts map[string]string) (volume.Volume, error) {
+func (s *VolumeStore) Create(name, driverName string, opts, labels map[string]string) (volume.Volume, error) {
 	name = normaliseVolumeName(name)
 	s.locks.Lock(name)
 	defer s.locks.Unlock(name)
 
-	v, err := s.create(name, driverName, opts)
+	v, err := s.create(name, driverName, opts, labels)
 	if err != nil {
 		return nil, &OpErr{Err: err, Name: name, Op: "create"}
 	}
@@ -169,7 +173,7 @@ func (s *VolumeStore) Create(name, driverName string, opts map[string]string) (v
 // If a volume with the name is already known, it will ask the stored driver for the volume.
 // If the passed in driver name does not match the driver name which is stored for the given volume name, an error is returned.
 // It is expected that callers of this function hold any necessary locks.
-func (s *VolumeStore) create(name, driverName string, opts map[string]string) (volume.Volume, error) {
+func (s *VolumeStore) create(name, driverName string, opts, labels map[string]string) (volume.Volume, error) {
 	// Validate the name in a platform-specific manner
 	valid, err := volume.IsVolumeNameValid(name)
 	if err != nil {
@@ -205,7 +209,12 @@ func (s *VolumeStore) create(name, driverName string, opts map[string]string) (v
 	if v, _ := vd.Get(name); v != nil {
 		return v, nil
 	}
-	return vd.Create(name, opts)
+	v, err := vd.Create(name, opts)
+	if err != nil {
+		return nil, err
+	}
+	s.labels[name] = labels
+	return volumeWithLabels{v, labels}, nil
 }
 
 // GetWithRef gets a volume with the given name from the passed in driver and stores the ref
@@ -227,6 +236,9 @@ func (s *VolumeStore) GetWithRef(name, driverName, ref string) (volume.Volume, e
 	}
 
 	s.setNamed(v, ref)
+	if labels, ok := s.labels[name]; ok {
+		return volumeWithLabels{v, labels}, nil
+	}
 	return v, nil
 }
 
@@ -241,6 +253,9 @@ func (s *VolumeStore) Get(name string) (volume.Volume, error) {
 		return nil, &OpErr{Err: err, Name: name, Op: "get"}
 	}
 	s.setNamed(v, "")
+	if labels, ok := s.labels[name]; ok {
+		return volumeWithLabels{v, labels}, nil
+	}
 	return v, nil
 }
 
@@ -371,4 +386,13 @@ func (s *VolumeStore) filter(vols []volume.Volume, f filterFunc) []volume.Volume
 		}
 	}
 	return ls
+}
+
+type volumeWithLabels struct {
+	volume.Volume
+	labels map[string]string
+}
+
+func (v volumeWithLabels) Labels() map[string]string {
+	return v.labels
 }
