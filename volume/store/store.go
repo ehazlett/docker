@@ -334,6 +334,10 @@ func (s *VolumeStore) getVolume(name string) (volume.Volume, error) {
 		b := tx.Bucket([]byte(volumeBucketName))
 		data := b.Get([]byte(name))
 
+		if string(data) == "" {
+			return nil
+		}
+
 		var meta volumeMetadata
 		buf := bytes.NewBuffer(data)
 
