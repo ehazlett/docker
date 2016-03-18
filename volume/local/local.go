@@ -77,6 +77,10 @@ func New(scope string, rootUID, rootGID int) (*Root, error) {
 	}
 
 	for _, d := range dirs {
+		if !d.IsDir() {
+			continue
+		}
+
 		name := filepath.Base(d.Name())
 		v := &localVolume{
 			driverName: r.Name(),

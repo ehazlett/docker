@@ -67,7 +67,6 @@ type Builder struct {
 	cacheBusted      bool
 	cancelled        chan struct{}
 	cancelOnce       sync.Once
-	isLast           bool
 	allowedBuildArgs map[string]bool // list of build-time args that are allowed for expansion/substitution and passing to commands in 'run'.
 
 	// TODO: remove once docker.Commit can receive a tag
@@ -213,10 +212,6 @@ func (b *Builder) build(config *types.ImageBuildOptions, context builder.Context
 
 	var shortImgID string
 	for i, n := range b.dockerfile.Children {
-		if i == len(b.dockerfile.Children) {
-			b.isLast = true
-		}
-
 		select {
 		case <-b.cancelled:
 			logrus.Debug("Builder: build cancelled!")

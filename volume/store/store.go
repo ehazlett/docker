@@ -1,23 +1,67 @@
 package store
 
 import (
+	"bytes"
+	"encoding/json"
+	"path/filepath"
 	"sync"
+	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/boltdb/bolt"
 	"github.com/docker/docker/pkg/locker"
 	"github.com/docker/docker/volume"
 	"github.com/docker/docker/volume/drivers"
 )
 
+const (
+	volumeDataDir    = "volumes"
+	volumeBucketName = "volumes"
+)
+
+type volumeMetadata struct {
+	Name   string
+	Labels map[string]string
+}
+
+type volumeWithLabels struct {
+	volume.Volume
+	labels map[string]string
+}
+
+func (v volumeWithLabels) Labels() map[string]string {
+	return v.labels
+}
+
 // New initializes a VolumeStore to keep
 // reference counting of volumes in the system.
-func New() *VolumeStore {
+func New(rootPath string) (*VolumeStore, error) {
+	// initialize metadata store
+	dbPath := filepath.Join(rootPath, volumeDataDir, "metadata.db")
+
+	db, err := bolt.Open(dbPath, 0600, &bolt.Options{Timeout: 1 * time.Second})
+	if err != nil {
+		return nil, err
+	}
+
+	// initialize volumes bucket
+	if err := db.Update(func(tx *bolt.Tx) error {
+		if _, err := tx.CreateBucketIfNotExists([]byte(volumeBucketName)); err != nil {
+			return err
+		}
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
 	return &VolumeStore{
 		locks:  &locker.Locker{},
 		names:  make(map[string]volume.Volume),
 		refs:   make(map[string][]string),
 		labels: make(map[string]map[string]string),
-	}
+		db:     db,
+	}, nil
 }
 
 func (s *VolumeStore) getNamed(name string) (volume.Volume, bool) {
@@ -55,6 +99,7 @@ type VolumeStore struct {
 	refs map[string][]string
 	// labels stores volume labels for each volume
 	labels map[string]map[string]string
+	db     *bolt.DB
 }
 
 // List proxies to all registered volume drivers to get the full list of volumes
@@ -214,6 +259,25 @@ func (s *VolumeStore) create(name, driverName string, opts, labels map[string]st
 		return nil, err
 	}
 	s.labels[name] = labels
+
+	metadata := &volumeMetadata{
+		Name:   name,
+		Labels: labels,
+	}
+
+	volData, err := json.Marshal(metadata)
+	if err != nil {
+		return nil, err
+	}
+
+	if err := s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(volumeBucketName))
+		err := b.Put([]byte(name), volData)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+
 	return volumeWithLabels{v, labels}, nil
 }
 
@@ -263,13 +327,37 @@ func (s *VolumeStore) Get(name string) (volume.Volume, error) {
 // if the driver is unknown it probes all drivers until it finds the first volume with that name.
 // it is expected that callers of this function hold any necessary locks
 func (s *VolumeStore) getVolume(name string) (volume.Volume, error) {
+	labels := map[string]string{}
+
+	// get meta
+	if err := s.db.Update(func(tx *bolt.Tx) error {
+		b := tx.Bucket([]byte(volumeBucketName))
+		data := b.Get([]byte(name))
+
+		var meta volumeMetadata
+		buf := bytes.NewBuffer(data)
+
+		if err := json.NewDecoder(buf).Decode(&meta); err != nil {
+			return err
+		}
+		labels = meta.Labels
+
+		return nil
+	}); err != nil {
+		return nil, err
+	}
+
 	logrus.Debugf("Getting volume reference for name: %s", name)
 	if v, exists := s.names[name]; exists {
 		vd, err := volumedrivers.GetDriver(v.DriverName())
 		if err != nil {
 			return nil, err
 		}
-		return vd.Get(name)
+		vol, err := vd.Get(name)
+		if err != nil {
+			return nil, err
+		}
+		return volumeWithLabels{vol, labels}, nil
 	}
 
 	logrus.Debugf("Probing all drivers for volume with name: %s", name)
@@ -283,7 +371,8 @@ func (s *VolumeStore) getVolume(name string) (volume.Volume, error) {
 		if err != nil {
 			continue
 		}
-		return v, nil
+
+		return volumeWithLabels{v, labels}, nil
 	}
 	return nil, errNoSuchVolume
 }
@@ -304,7 +393,8 @@ func (s *VolumeStore) Remove(v volume.Volume) error {
 	}
 
 	logrus.Debugf("Removing volume reference: driver %s, name %s", v.DriverName(), name)
-	if err := vd.Remove(v); err != nil {
+	vol := withoutLabels(v)
+	if err := vd.Remove(vol); err != nil {
 		return &OpErr{Err: err, Name: name, Op: "remove"}
 	}
 
@@ -388,11 +478,10 @@ func (s *VolumeStore) filter(vols []volume.Volume, f filterFunc) []volume.Volume
 	return ls
 }
 
-type volumeWithLabels struct {
-	volume.Volume
-	labels map[string]string
-}
+func withoutLabels(v volume.Volume) volume.Volume {
+	if vol, ok := v.(volumeWithLabels); ok {
+		return vol.Volume
+	}
 
-func (v volumeWithLabels) Labels() map[string]string {
-	return v.labels
+	return v
 }
