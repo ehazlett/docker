@@ -1,6 +1,8 @@
 package daemon
 
 import (
+	"archive/tar"
+	"bytes"
 	"errors"
 	"fmt"
 	"net"
@@ -901,4 +903,42 @@ func (daemon *Daemon) releaseNetwork(container *container.Container) {
 		}
 		daemon.LogNetworkEventWithAttributes(nw, "disconnect", attributes)
 	}
+}
+
+func (daemon *Daemon) getSecrets(container *container.Container) ([]byte, error) {
+	logrus.Debugf("mounting secrets for container %s", container.ID)
+	logrus.Debugf("container %s requested secrets %v", container.ID, container.Config.Secrets)
+
+	// generate and return tar of secrets
+	buf := new(bytes.Buffer)
+	tw := tar.NewWriter(buf)
+
+	for _, s := range container.Config.Secrets {
+		logrus.Debugf("requesting secret %q for container %s", s, container.ID)
+		secret, err := daemon.secretStore.InspectSecret(s)
+		if err != nil {
+			return nil, err
+		}
+
+		logrus.Debugf("received secret %s for container %s", secret.Name, container.ID)
+
+		h := &tar.Header{
+			Name: secret.Name,
+			Mode: 0600,
+			Size: int64(len(secret.Data)),
+		}
+		if err := tw.WriteHeader(h); err != nil {
+			return nil, err
+
+		}
+		if _, err := tw.Write([]byte(secret.Data)); err != nil {
+			return nil, err
+		}
+	}
+
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+
+	return buf.Bytes(), nil
 }

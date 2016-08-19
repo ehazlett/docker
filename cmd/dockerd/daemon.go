@@ -19,6 +19,7 @@ import (
 	"github.com/docker/docker/api/server/router/container"
 	"github.com/docker/docker/api/server/router/image"
 	"github.com/docker/docker/api/server/router/network"
+	secretrouter "github.com/docker/docker/api/server/router/secret"
 	swarmrouter "github.com/docker/docker/api/server/router/swarm"
 	systemrouter "github.com/docker/docker/api/server/router/system"
 	"github.com/docker/docker/api/server/router/volume"
@@ -28,6 +29,8 @@ import (
 	"github.com/docker/docker/daemon"
 	"github.com/docker/docker/daemon/cluster"
 	"github.com/docker/docker/daemon/logger"
+	"github.com/docker/docker/daemon/secrets"
+	builtinsecrets "github.com/docker/docker/daemon/secrets/builtin"
 	"github.com/docker/docker/dockerversion"
 	"github.com/docker/docker/libcontainerd"
 	dopts "github.com/docker/docker/opts"
@@ -243,7 +246,10 @@ func (cli *DaemonCli) start(opts daemonOptions) (err error) {
 		<-stopc // wait for daemonCli.start() to return
 	})
 
-	d, err := daemon.NewDaemon(cli.Config, registryService, containerdRemote)
+	// TODO: swap if using swarm store
+	secretStore := builtinsecrets.NewSecretStore("changeme")
+
+	d, err := daemon.NewDaemon(cli.Config, registryService, containerdRemote, secretStore)
 	if err != nil {
 		return fmt.Errorf("Error starting daemon: %v", err)
 	}
@@ -271,7 +277,7 @@ func (cli *DaemonCli) start(opts daemonOptions) (err error) {
 	}).Info("Docker daemon")
 
 	cli.initMiddlewares(api, serverConfig)
-	initRouter(api, d, c)
+	initRouter(api, d, c, secretStore)
 
 	cli.d = d
 	cli.setupConfigReloadTrap()
@@ -395,7 +401,7 @@ func loadDaemonCliConfig(opts daemonOptions) (*daemon.Config, error) {
 	return config, nil
 }
 
-func initRouter(s *apiserver.Server, d *daemon.Daemon, c *cluster.Cluster) {
+func initRouter(s *apiserver.Server, d *daemon.Daemon, c *cluster.Cluster, ss secrets.SecretStore) {
 	decoder := runconfig.ContainerDecoder{}
 
 	routers := []router.Router{}
@@ -410,8 +416,8 @@ func initRouter(s *apiserver.Server, d *daemon.Daemon, c *cluster.Cluster) {
 		volume.NewRouter(d),
 		build.NewRouter(dockerfile.NewBuildManager(d)),
 		swarmrouter.NewRouter(c),
+		secretrouter.NewRouter(ss),
 	}...)
-
 	if d.NetworkControllerEnabled() {
 		routers = append(routers, network.NewRouter(d, c))
 	}

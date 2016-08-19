@@ -28,6 +28,8 @@ import (
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/daemon/events"
 	"github.com/docker/docker/daemon/exec"
+	"github.com/docker/docker/daemon/secrets"
+	"github.com/docker/engine-api/types"
 	"github.com/docker/libnetwork/cluster"
 	// register graph drivers
 	_ "github.com/docker/docker/daemon/graphdriver/register"
@@ -100,6 +102,7 @@ type Daemon struct {
 	containerdRemote          libcontainerd.Remote
 	defaultIsolation          containertypes.Isolation // Default isolation mode on Windows
 	clusterProvider           cluster.Provider
+	secretStore               secrets.SecretStore
 }
 
 func (daemon *Daemon) restore() error {
@@ -413,7 +416,7 @@ func (daemon *Daemon) IsSwarmCompatible() error {
 
 // NewDaemon sets up everything for the daemon to be able to service
 // requests from the webserver.
-func NewDaemon(config *Config, registryService registry.Service, containerdRemote libcontainerd.Remote) (daemon *Daemon, err error) {
+func NewDaemon(config *Config, registryService registry.Service, containerdRemote libcontainerd.Remote, secretStore secrets.SecretStore) (daemon *Daemon, err error) {
 	setDefaultMtu(config)
 
 	// Ensure that we have a correct root key limit for launching containers.
@@ -611,6 +614,7 @@ func NewDaemon(config *Config, registryService registry.Service, containerdRemot
 		Config: config.LogConfig.Config,
 	}
 	d.RegistryService = registryService
+	d.secretStore = secretStore
 	d.EventsService = eventsService
 	d.volumes = volStore
 	d.root = config.Root
