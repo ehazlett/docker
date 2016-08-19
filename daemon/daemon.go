@@ -28,6 +28,8 @@ import (
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/daemon/events"
 	"github.com/docker/docker/daemon/exec"
+	"github.com/docker/docker/daemon/secrets"
+	"github.com/docker/engine-api/types"
 	"github.com/docker/libnetwork/cluster"
 	// register graph drivers
 	_ "github.com/docker/docker/daemon/graphdriver/register"
@@ -40,6 +42,7 @@ import (
 	"github.com/docker/docker/pkg/fileutils"
 	"github.com/docker/docker/pkg/graphdb"
 	"github.com/docker/docker/pkg/idtools"
+	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/registrar"
 	"github.com/docker/docker/pkg/signal"
@@ -103,6 +106,7 @@ type Daemon struct {
 	containerdRemote          libcontainerd.Remote
 	defaultIsolation          containertypes.Isolation // Default isolation mode on Windows
 	clusterProvider           cluster.Provider
+	secretStore               secrets.SecretStore
 }
 
 func (daemon *Daemon) restore() error {
@@ -451,7 +455,7 @@ func (daemon *Daemon) IsSwarmCompatible() error {
 
 // NewDaemon sets up everything for the daemon to be able to service
 // requests from the webserver.
-func NewDaemon(config *Config, registryService registry.Service, containerdRemote libcontainerd.Remote) (daemon *Daemon, err error) {
+func NewDaemon(config *Config, registryService registry.Service, containerdRemote libcontainerd.Remote, secretStore secrets.SecretStore) (daemon *Daemon, err error) {
 	setDefaultMtu(config)
 
 	// Ensure that we have a correct root key limit for launching containers.
@@ -659,6 +663,7 @@ func NewDaemon(config *Config, registryService registry.Service, containerdRemot
 		Config: config.LogConfig.Config,
 	}
 	d.RegistryService = registryService
+	d.secretStore = secretStore
 	d.EventsService = eventsService
 	d.volumes = volStore
 	d.root = config.Root
@@ -805,6 +810,13 @@ func (daemon *Daemon) Mount(container *container.Container) error {
 
 // Unmount unsets the container base filesystem
 func (daemon *Daemon) Unmount(container *container.Container) error {
+	if secretsSupported() && len(container.Config.Secrets) > 0 {
+		secretsMount := secretsMountPath(container)
+		if err := mount.Unmount(secretsMount); err != nil {
+			return err
+		}
+	}
+
 	if err := container.RWLayer.Unmount(); err != nil {
 		logrus.Errorf("Error unmounting container %s: %s", container.ID, err)
 		return err
