@@ -670,12 +670,19 @@ func (daemon *Daemon) createSpec(c *container.Container) (*libcontainerd.Spec, e
 		return nil, err
 	}
 
+	if secretsSupported() && len(c.Config.Secrets) > 0 {
+		if err := daemon.setupSecrets(c); err != nil {
+			return nil, err
+		}
+	}
+
 	ms, err := daemon.setupMounts(c)
 	if err != nil {
 		return nil, err
 	}
 	ms = append(ms, c.IpcMounts()...)
 	ms = append(ms, c.TmpfsMounts()...)
+
 	sort.Sort(mounts(ms))
 	if err := setMounts(daemon, &s, c, ms); err != nil {
 		return nil, fmt.Errorf("linux mounts: %v", err)
@@ -688,12 +695,12 @@ func (daemon *Daemon) createSpec(c *container.Container) (*libcontainerd.Spec, e
 				return nil, err
 			}
 
-			s.Hooks = specs.Hooks{
-				Prestart: []specs.Hook{{
-					Path: target, // FIXME: cross-platform
-					Args: []string{"libnetwork-setkey", c.ID, daemon.netController.ID()},
-				}},
-			}
+			hooks := specs.Hooks{}
+			hooks.Prestart = []specs.Hook{{
+				Path: target, // FIXME: cross-platform
+				Args: []string{"libnetwork-setkey", c.ID, daemon.netController.ID()},
+			}}
+			s.Hooks = hooks
 		}
 	}
 
