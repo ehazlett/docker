@@ -25,13 +25,13 @@ func (sr *secretRouter) Routes() []router.Route {
 func (sr *secretRouter) initRoutes() {
 	sr.routes = []router.Route{
 		// GET
-		router.NewGetRoute("/secrets/{name:.*}", sr.inspectSecret),
+		router.NewGetRoute("/secrets/{id:.*}", sr.inspectSecret),
 		router.NewGetRoute("/secrets", sr.listSecrets),
 		// PUT
-		router.NewPutRoute("/secrets/{name:.*}", sr.updateSecret),
+		router.NewPutRoute("/secrets/{id:.*}", sr.updateSecret),
 		// POST
-		router.NewPostRoute("/secrets", sr.createSecret),
+		router.NewPostRoute("/secrets/create", sr.createSecret),
 		// DELETE
-		router.NewDeleteRoute("/secrets/{name:.*}", sr.removeSecret),
+		router.NewDeleteRoute("/secrets/{id:.*}", sr.removeSecret),
 	}
 }

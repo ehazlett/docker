@@ -35,20 +35,20 @@ func (s BuiltinSecretStore) ListSecrets() ([]enginetypes.Secret, error) {
 	}
 	return all, nil
 }
-func (s BuiltinSecretStore) InspectSecret(name string) (*enginetypes.Secret, error) {
-	if v, ok := s.secrets[name]; ok {
+func (s BuiltinSecretStore) InspectSecret(id string) (*enginetypes.Secret, error) {
+	if v, ok := s.secrets[id]; ok {
 		return &v, nil
 	}
 	return nil, nil
 }
-func (s BuiltinSecretStore) UpdateSecret(name string, secret *enginetypes.Secret) error {
-	s.secrets[name] = *secret
+func (s BuiltinSecretStore) UpdateSecret(id string, secret *enginetypes.Secret) error {
+	s.secrets[id] = *secret
 	return nil
 }
 
-func (s BuiltinSecretStore) RemoveSecret(name string) error {
-	if _, ok := s.secrets[name]; ok {
-		delete(s.secrets, name)
+func (s BuiltinSecretStore) RemoveSecret(id string) error {
+	if _, ok := s.secrets[id]; ok {
+		delete(s.secrets, id)
 	}
 	return nil
 }
