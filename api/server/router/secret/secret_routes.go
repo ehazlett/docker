@@ -14,17 +14,21 @@ func (sr *secretRouter) createSecret(ctx context.Context, w http.ResponseWriter,
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
 		return err
 	}
-	return sr.backend.CreateSecret(s)
+	secret, err := sr.backend.CreateSecret(s)
+	if err != nil {
+		return err
+	}
+	return httputils.WriteJSON(w, http.StatusCreated, secret)
 }
 
 func (sr *secretRouter) updateSecret(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	name := vars["name"]
+	id := vars["id"]
 
 	var s enginetypes.Secret
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
 		return err
 	}
-	return sr.backend.UpdateSecret(name, &s)
+	return sr.backend.UpdateSecret(id, &s)
 }
 
 func (sr *secretRouter) listSecrets(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
@@ -36,7 +40,7 @@ func (sr *secretRouter) listSecrets(ctx context.Context, w http.ResponseWriter, 
 }
 
 func (sr *secretRouter) inspectSecret(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	result, err := sr.backend.InspectSecret(vars["name"])
+	result, err := sr.backend.InspectSecret(vars["id"])
 	if err != nil {
 		return err
 	}
@@ -48,6 +52,6 @@ func (sr *secretRouter) removeSecret(ctx context.Context, w http.ResponseWriter,
 		return err
 	}
 
-	name := vars["name"]
-	return sr.backend.RemoveSecret(name)
+	id := vars["id"]
+	return sr.backend.RemoveSecret(id)
 }

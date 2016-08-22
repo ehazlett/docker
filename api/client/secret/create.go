@@ -1,7 +1,9 @@
 package secret
 
 import (
+	"bufio"
 	"fmt"
+	"os"
 
 	"golang.org/x/net/context"
 
@@ -41,13 +43,18 @@ func newCreateCommand(dockerCli *client.DockerCli) *cobra.Command {
 
 func runCreate(dockerCli *client.DockerCli, opts createOptions) error {
 	client := dockerCli.Client()
-
-	volReq := types.SecretCreateRequest{
-		Name: opts.name,
-		Data: "TODO",
+	rdr := bufio.NewReader(os.Stdin)
+	data, _, err := rdr.ReadLine()
+	if err != nil {
+		return err
 	}
 
-	secret, err := client.CreateSecret(context.Background(), volReq)
+	secretReq := types.SecretCreateRequest{
+		Name: opts.name,
+		Data: string(data),
+	}
+
+	secret, err := client.SecretCreate(context.Background(), secretReq)
 	if err != nil {
 		return err
 	}
