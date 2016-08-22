@@ -19,19 +19,19 @@ func NewRouter(b Backend) router.Router {
 
 // Routes returns the available routers to the secret controller
 func (sr *secretRouter) Routes() []router.Route {
-    return sr.routes
+	return sr.routes
 }
 
 func (sr *secretRouter) initRoutes() {
 	sr.routes = []router.Route{
-	    // GET
-	    router.NewGetRoute("/secrets/{id:.*}", sr.inspectSecret),
-	    router.NewGetRoute("/secrets", sr.listSecrets),
-	    // PUT
-	    router.NewPutRoute("/secrets/{id:.*}", sr.updateSecret),
-	    // POST
-	    router.NewPostRoute("/secrets", sr.createSecret),
-	    // DELETE
-	    router.NewDeleteRoute("/secrets/{id:.*}", sr.removeSecret),
+		// GET
+		router.NewGetRoute("/secrets/{name:.*}", sr.inspectSecret),
+		router.NewGetRoute("/secrets", sr.listSecrets),
+		// PUT
+		router.NewPutRoute("/secrets/{name:.*}", sr.updateSecret),
+		// POST
+		router.NewPostRoute("/secrets", sr.createSecret),
+		// DELETE
+		router.NewDeleteRoute("/secrets/{name:.*}", sr.removeSecret),
 	}
 }

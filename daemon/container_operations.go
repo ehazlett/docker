@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"path"
@@ -905,7 +906,7 @@ func (daemon *Daemon) releaseNetwork(container *container.Container) {
 	}
 }
 
-func (daemon *Daemon) getSecrets(container *container.Container) ([]byte, error) {
+func (daemon *Daemon) getSecrets(container *container.Container) (io.Reader, error) {
 	logrus.Debugf("mounting secrets for container %s", container.ID)
 	logrus.Debugf("container %s requested secrets %v", container.ID, container.Config.Secrets)
 
@@ -940,5 +941,5 @@ func (daemon *Daemon) getSecrets(container *container.Container) ([]byte, error)
 		return nil, err
 	}
 
-	return buf.Bytes(), nil
+	return buf, nil
 }

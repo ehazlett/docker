@@ -42,6 +42,7 @@ import (
 	"github.com/docker/docker/pkg/fileutils"
 	"github.com/docker/docker/pkg/graphdb"
 	"github.com/docker/docker/pkg/idtools"
+	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/registrar"
 	"github.com/docker/docker/pkg/signal"
@@ -760,6 +761,13 @@ func (daemon *Daemon) Mount(container *container.Container) error {
 
 // Unmount unsets the container base filesystem
 func (daemon *Daemon) Unmount(container *container.Container) error {
+	if secretsSupported() && len(container.Config.Secrets) > 0 {
+		secretsMount := secretsMountPath(container)
+		if err := mount.Unmount(secretsMount); err != nil {
+			return err
+		}
+	}
+
 	if err := container.RWLayer.Unmount(); err != nil {
 		logrus.Errorf("Error unmounting container %s: %s", container.ID, err)
 		return err
