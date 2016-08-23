@@ -34,11 +34,11 @@ func runList(dockerCli *client.DockerCli) error {
 	}
 
 	w := tabwriter.NewWriter(dockerCli.Out(), 20, 1, 3, ' ', 0)
-	fmt.Fprintf(w, "ID \tNAME")
+	fmt.Fprintf(w, "ID \tNAME \tMOUNTPOINT")
 	fmt.Fprintf(w, "\n")
 
 	for _, s := range secrets {
-		fmt.Fprintf(w, "%s\t%s\n", s.ID, s.Name)
+		fmt.Fprintf(w, "%s\t%s\t%s\n", s.ID, s.Name, s.Mountpoint)
 	}
 	w.Flush()
 	return nil

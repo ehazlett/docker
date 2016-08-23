@@ -3,55 +3,52 @@ package secret
 import (
 	"bufio"
 	"fmt"
+	"io/ioutil"
 	"os"
 
 	"golang.org/x/net/context"
 
 	"github.com/docker/docker/api/client"
 	"github.com/docker/docker/cli"
-	"github.com/docker/docker/opts"
 	"github.com/docker/engine-api/types"
 	"github.com/spf13/cobra"
 )
 
 type createOptions struct {
 	name       string
-	driver     string
-	driverOpts opts.MapOpts
-	labels     []string
+	mountpoint string
 }
 
 func newCreateCommand(dockerCli *client.DockerCli) *cobra.Command {
-	opts := createOptions{
-		driverOpts: *opts.NewMapOpts(nil, nil),
-	}
+	opts := createOptions{}
 
 	cmd := &cobra.Command{
-		Use:   "create [OPTIONS]",
+		Use:   "create [OPTIONS] NAME MOUNTPOINT",
 		Short: "Create a secret",
 		Long:  createDescription,
-		Args:  cli.NoArgs,
+		Args:  cli.RequiresMinArgs(2),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.name = args[0]
+			opts.mountpoint = args[1]
 			return runCreate(dockerCli, opts)
 		},
 	}
-	flags := cmd.Flags()
-	flags.StringVar(&opts.name, "name", "", "Specify secret name")
 
 	return cmd
 }
 
 func runCreate(dockerCli *client.DockerCli, opts createOptions) error {
 	client := dockerCli.Client()
-	rdr := bufio.NewReader(os.Stdin)
-	data, _, err := rdr.ReadLine()
+	r := bufio.NewReader(os.Stdin)
+	data, err := ioutil.ReadAll(r)
 	if err != nil {
 		return err
 	}
 
 	secretReq := types.SecretCreateRequest{
-		Name: opts.name,
-		Data: string(data),
+		Name:       opts.name,
+		Mountpoint: opts.mountpoint,
+		Data:       string(data),
 	}
 
 	secret, err := client.SecretCreate(context.Background(), secretReq)

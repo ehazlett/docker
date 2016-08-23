@@ -924,7 +924,7 @@ func (daemon *Daemon) getSecrets(container *container.Container) (io.Reader, err
 		logrus.Debugf("received secret %s for container %s", secret.Name, container.ID)
 
 		h := &tar.Header{
-			Name: secret.Name,
+			Name: secret.Mountpoint,
 			Mode: 0600,
 			Size: int64(len(secret.Data)),
 		}
