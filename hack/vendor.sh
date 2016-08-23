@@ -67,6 +67,7 @@ clone git github.com/docker/go-units f2145db703495b2e525c59662db69a7344b00bb8
 clone git github.com/docker/go-connections 988efe982fdecb46f01d53465878ff1f2ff411ce
 
 clone git github.com/RackSec/srslog 365bf33cd9acc21ae1c355209865f17228ca534e
+clone git github.com/docker/engine-api 41f7f9568954c6c37bfbc2b4a2f33bbe17183f64 https://github.com/ehazlett/engine-api.git
 clone git github.com/imdario/mergo 0.2.1
 
 #get libnetwork packages

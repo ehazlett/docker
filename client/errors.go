@@ -109,6 +109,27 @@ func IsErrVolumeNotFound(err error) bool {
 	return IsErrNotFound(err)
 }
 
+// secretNotFoundError implements an error returned when a secret is not found
+type secretNotFoundError struct {
+	secretName string
+}
+
+// NoFound indicates that this error type is of NotFound
+func (e secretNotFoundError) NotFound() bool {
+	return true
+}
+
+// Error returns a string representation of a secretNotFoundError
+func (e secretNotFoundError) Error() string {
+	return fmt.Sprintf("Error: No such secret: %s", e.secretName)
+}
+
+// IsErrSecretNotFound returns true if the error is caused
+// when a secret is not found in the docker host.
+func IsErrSecretNotFound(err error) bool {
+	return IsErrNotFound(err)
+}
+
 // unauthorizedError represents an authorization error in a remote registry.
 type unauthorizedError struct {
 	cause error
