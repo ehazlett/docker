@@ -27,7 +27,7 @@ func (daemon *Daemon) setupSecrets(c *container.Container) error {
 		return fmt.Errorf("secrets: unable to setup ramfs mount: %s", err)
 	}
 
-	// TODO: inject data
+	// inject data
 	rdr, err := daemon.getSecrets(c)
 	if err != nil {
 		return err
