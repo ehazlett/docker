@@ -415,6 +415,20 @@ func (container *Container) TmpfsMounts() []Mount {
 	return mounts
 }
 
+// RamfsMounts returns the list of ramfs mounts
+func (container *Container) RamfsMounts() []Mount {
+	var mounts []Mount
+	for dest, data := range container.HostConfig.Ramfs {
+		logrus.Debugf("ramfs mount: dest=%s data=%v", dest, data)
+		mounts = append(mounts, Mount{
+			Source:      "ramfs",
+			Destination: dest,
+			Data:        data,
+		})
+	}
+	return mounts
+}
+
 // cleanResourcePath cleans a resource path and prepares to combine with mnt path
 func cleanResourcePath(path string) string {
 	return filepath.Join(string(os.PathSeparator), path)

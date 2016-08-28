@@ -138,10 +138,10 @@ func TestGetMounts(t *testing.T) {
 	}
 }
 
-func TestMergeTmpfsOptions(t *testing.T) {
+func TestMergeFsOptions(t *testing.T) {
 	options := []string{"noatime", "ro", "size=10k", "defaults", "atime", "defaults", "rw", "rprivate", "size=1024k", "slave"}
 	expected := []string{"atime", "rw", "size=1024k", "slave"}
-	merged, err := MergeTmpfsOptions(options)
+	merged, err := MergeFsOptions(options)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -155,7 +155,7 @@ func TestMergeTmpfsOptions(t *testing.T) {
 	}
 
 	options = []string{"noatime", "ro", "size=10k", "atime", "rw", "rprivate", "size=1024k", "slave", "size"}
-	_, err = MergeTmpfsOptions(options)
+	_, err = MergeFsOptions(options)
 	if err == nil {
 		t.Fatal("Expected error got nil")
 	}

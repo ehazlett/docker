@@ -54,6 +54,7 @@ type ContainerOptions struct {
 	storageOpt        opts.ListOpts
 	labelsFile        opts.ListOpts
 	loggingOpts       opts.ListOpts
+	ramfs             opts.ListOpts
 	privileged        bool
 	pidMode           string
 	utsMode           string
@@ -139,6 +140,7 @@ func AddFlags(flags *pflag.FlagSet) *ContainerOptions {
 		storageOpt:        opts.NewListOpts(nil),
 		sysctls:           opts.NewMapOpts(nil, opts.ValidateSysctl),
 		tmpfs:             opts.NewListOpts(nil),
+		ramfs:             opts.NewListOpts(nil),
 		ulimits:           NewUlimitOpt(nil),
 		volumes:           opts.NewListOpts(nil),
 		volumesFrom:       opts.NewListOpts(nil),
@@ -200,6 +202,7 @@ func AddFlags(flags *pflag.FlagSet) *ContainerOptions {
 	flags.Var(&copts.loggingOpts, "log-opt", "Log driver options")
 	flags.Var(&copts.storageOpt, "storage-opt", "Storage driver options for the container")
 	flags.Var(&copts.tmpfs, "tmpfs", "Mount a tmpfs directory")
+	flags.Var(&copts.ramfs, "ramfs", "Mount a ramfs directory")
 	flags.Var(&copts.volumesFrom, "volumes-from", "Mount volumes from the specified container(s)")
 	flags.VarP(&copts.volumes, "volume", "v", "Bind mount a volume")
 
@@ -346,16 +349,14 @@ func Parse(flags *pflag.FlagSet, copts *ContainerOptions) (*container.Config, *c
 	}
 
 	// Can't evaluate options passed into --tmpfs until we actually mount
-	tmpfs := make(map[string]string)
-	for _, t := range copts.tmpfs.GetAll() {
-		if arr := strings.SplitN(t, ":", 2); len(arr) > 1 {
-			if _, _, err := mount.ParseTmpfsOptions(arr[1]); err != nil {
-				return nil, nil, nil, err
-			}
-			tmpfs[arr[0]] = arr[1]
-		} else {
-			tmpfs[arr[0]] = ""
-		}
+	tmpfs, err := parseFSOpts(copts.tmpfs)
+	if err != nil {
+	    return nil, nil, nil, err
+	}
+
+	ramfs, err := parseFSOpts(copts.ramfs)
+	if err != nil {
+	    return nil, nil, nil, err
 	}
 
 	var (
@@ -589,6 +590,7 @@ func Parse(flags *pflag.FlagSet, copts *ContainerOptions) (*container.Config, *c
 		ShmSize:        shmSize,
 		Resources:      resources,
 		Tmpfs:          tmpfs,
+		Ramfs: ramfs,
 		Sysctls:        copts.sysctls.GetAll(),
 		Runtime:        copts.runtime,
 	}
@@ -678,6 +680,22 @@ func parseLoggingOpts(loggingDriver string, loggingOpts []string) (map[string]st
 		return map[string]string{}, fmt.Errorf("invalid logging opts for driver %s", loggingDriver)
 	}
 	return loggingOptsMap, nil
+}
+
+func parseFSOpts(opts opts.ListOpts) (map[string]string, error) {
+    mOpts := make(map[string]string)
+	for _, t := range opts.GetAll() {
+		if arr := strings.SplitN(t, ":", 2); len(arr) > 1 {
+			if _, _, err := mount.ParseFSOptions(arr[1]); err != nil {
+			    return nil, err
+			}
+			mOpts[arr[0]] = arr[1]
+		} else {
+			mOpts[arr[0]] = ""
+		}
+	}
+
+	return mOpts, nil
 }
 
 // takes a local seccomp daemon, reads the file contents for sending to the daemon

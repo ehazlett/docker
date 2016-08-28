@@ -21,8 +21,13 @@ func (daemon *Daemon) setupMounts(c *container.Container) ([]container.Mount, er
 	for _, m := range c.TmpfsMounts() {
 		tmpfsMounts[m.Destination] = true
 	}
+	ramfsMounts := make(map[string]bool)
+	for _, m := range c.RamfsMounts() {
+		ramfsMounts[m.Destination] = true
+	}
+
 	for _, m := range c.MountPoints {
-		if tmpfsMounts[m.Destination] {
+		if tmpfsMounts[m.Destination] || ramfsMounts[m.Destination] {
 			continue
 		}
 		if err := daemon.lazyInitializeVolume(c.ID, m); err != nil {

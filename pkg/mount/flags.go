@@ -68,8 +68,8 @@ var propagationFlags = map[string]bool{
 	"rslave":      true,
 }
 
-// MergeTmpfsOptions merge mount options to make sure there is no duplicate.
-func MergeTmpfsOptions(options []string) ([]string, error) {
+// MergeFsOptions merge mount options to make sure there is no duplicate.
+func MergeFsOptions(options []string) ([]string, error) {
 	// We use collisions maps to remove duplicates.
 	// For flag, the key is the flag value (the key for propagation flag is -1)
 	// For data=value, the key is the data
@@ -136,13 +136,13 @@ func parseOptions(options string) (int, string) {
 	return flag, strings.Join(data, ",")
 }
 
-// ParseTmpfsOptions parse fstab type mount options into flags and data
-func ParseTmpfsOptions(options string) (int, string, error) {
+// ParseFSOptions parse fstab type mount options into flags and data
+func ParseFSOptions(options string) (int, string, error) {
 	flags, data := parseOptions(options)
 	for _, o := range strings.Split(data, ",") {
 		opt := strings.SplitN(o, "=", 2)
 		if !validFlags[opt[0]] {
-			return 0, "", fmt.Errorf("Invalid tmpfs option %q", opt)
+			return 0, "", fmt.Errorf("Invalid fs mount option %q", opt)
 		}
 	}
 	return flags, data, nil

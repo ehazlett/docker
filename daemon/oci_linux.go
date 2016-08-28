@@ -479,19 +479,28 @@ func setMounts(daemon *Daemon, s *specs.Spec, c *container.Container, mounts []c
 			}
 		}
 
+		localFs := false
+		mountOptions := ""
+		if m.Source == "ramfs" {
+			mountOptions = c.HostConfig.Ramfs[m.Destination]
+			localFs = true
+		}
 		if m.Source == "tmpfs" {
-			data := c.HostConfig.Tmpfs[m.Destination]
+			mountOptions = c.HostConfig.Tmpfs[m.Destination]
+			localFs = true
+		}
+		if localFs {
 			options := []string{"noexec", "nosuid", "nodev", string(volume.DefaultPropagationMode)}
-			if data != "" {
-				options = append(options, strings.Split(data, ",")...)
+			if mountOptions != "" {
+				options = append(options, strings.Split(mountOptions, ",")...)
 			}
 
-			merged, err := mount.MergeTmpfsOptions(options)
+			merged, err := mount.MergeFsOptions(options)
 			if err != nil {
 				return err
 			}
 
-			s.Mounts = append(s.Mounts, specs.Mount{Destination: m.Destination, Source: m.Source, Type: "tmpfs", Options: merged})
+			s.Mounts = append(s.Mounts, specs.Mount{Destination: m.Destination, Source: m.Source, Type: m.Source, Options: merged})
 			continue
 		}
 
@@ -663,6 +672,8 @@ func (daemon *Daemon) createSpec(c *container.Container) (*libcontainerd.Spec, e
 	}
 	ms = append(ms, c.IpcMounts()...)
 	ms = append(ms, c.TmpfsMounts()...)
+	ms = append(ms, c.RamfsMounts()...)
+
 	sort.Sort(mounts(ms))
 	if err := setMounts(daemon, &s, c, ms); err != nil {
 		return nil, fmt.Errorf("linux mounts: %v", err)

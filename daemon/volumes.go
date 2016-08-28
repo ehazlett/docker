@@ -134,6 +134,11 @@ func (daemon *Daemon) registerMountPoints(container *container.Container, hostCo
 			return fmt.Errorf("Duplicate mount point '%s'", bind.Destination)
 		}
 
+		_, ramfsExists := hostConfig.Ramfs[bind.Destination]
+		if binds[bind.Destination] || ramfsExists {
+			return fmt.Errorf("Duplicate mount point '%s'", bind.Destination)
+		}
+
 		if len(bind.Name) > 0 {
 			// create the volume
 			v, err := daemon.volumes.CreateWithRef(bind.Name, bind.Driver, container.ID, nil, nil)
