@@ -1,49 +1,54 @@
 package daemon
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
-
-	"github.com/Sirupsen/logrus"
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/volume"
 )
 
-func secretsMountPath(c *container.Container) string {
-	return filepath.Join(c.Root, "secrets")
-}
+const (
+	secretsVolumeName  = "secrets"
+	secretsVolumeLabel = "com.docker.secrets.container"
+)
 
 func (daemon *Daemon) setupSecrets(c *container.Container) error {
-	secretsPath := secretsMountPath(c)
-	// TODO: check for existing mount and unmount
-	if err := os.MkdirAll(secretsPath, 0700); err != nil {
-		return fmt.Errorf("secrets: unable to create ramfs mountpoint: %s", err)
-	}
-	logrus.Debugf("secrets: setting up secret ramfs at %s", secretsPath)
-	if err := mount.Mount("ramfs", secretsPath, "ramfs", "nodev"); err != nil {
-		return fmt.Errorf("secrets: unable to setup ramfs mount: %s", err)
-	}
-
-	// inject data
 	rdr, err := daemon.getSecrets(c)
 	if err != nil {
 		return err
 	}
 
-	if err := archive.Untar(rdr, secretsPath, nil); err != nil {
-		return err
-	}
-
-	// add mountpoint if not exists
-	if _, ok := c.MountPoints["/run/secrets"]; !ok {
-		c.MountPoints["secrets"] = &volume.MountPoint{
-			Source:      secretsPath,
+	m, ok := c.MountPoints[secretsContainerMountPath]
+	if !ok {
+		opts := map[string]string{
+			"type": "ramfs",
+		}
+		labels := map[string]string{
+			secretsVolumeLabel: c.ID,
+		}
+		vol, err := daemon.VolumeCreate("", "", opts, labels)
+		if err != nil {
+			return err
+		}
+		m = &volume.MountPoint{
+			Name:        vol.Name,
+			Source:      vol.Mountpoint,
 			Destination: secretsContainerMountPath,
 			RW:          false,
 		}
+		if c.Config.Labels == nil {
+			c.Config.Labels = map[string]string{}
+		}
+		c.Config.Labels[secretsVolumeLabel] = vol.Name
+	}
+	c.MountPoints[secretsVolumeName] = m
+	if c.Config.Volumes == nil {
+		c.Config.Volumes = map[string]struct{}{}
+	}
+	c.Config.Volumes[m.Name] = struct{}{}
+
+	// TODO: populate volume
+	if err := archive.Untar(rdr, m.Source, nil); err != nil {
+		return err
 	}
 	return nil
 }
