@@ -10,6 +10,7 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/registry"
+	"github.com/docker/docker/api/types/secret"
 	"github.com/docker/docker/api/types/swarm"
 	"golang.org/x/net/context"
 )
@@ -138,9 +139,9 @@ type VolumeAPIClient interface {
 
 // SecretAPIClient defines API client methods for secret management
 type SecretAPIClient interface {
-	SecretCreate(ctx context.Context, options types.SecretCreateRequest) (types.Secret, error)
-	SecretInspect(ctx context.Context, secretID string) (types.Secret, error)
-	SecretInspectWithRaw(ctx context.Context, secretID string) (types.Secret, []byte, error)
+	SecretCreate(ctx context.Context, options types.SecretCreateRequest) (secret.Secret, error)
+	SecretInspect(ctx context.Context, secretID string) (secret.Secret, error)
+	SecretInspectWithRaw(ctx context.Context, secretID string) (secret.Secret, []byte, error)
 	SecretList(ctx context.Context) (types.SecretsListResponse, error)
 	SecretRemove(ctx context.Context, secretID string) error
 }

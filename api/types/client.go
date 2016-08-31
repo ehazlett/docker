@@ -5,8 +5,9 @@ import (
 	"io"
 	"net"
 
-	"github.com/docker/docker/api/types/container"
-	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/engine-api/types/container"
+	"github.com/docker/engine-api/types/filters"
+	"github.com/docker/engine-api/types/secret"
 	"github.com/docker/go-units"
 )
 
@@ -144,6 +145,7 @@ type ImageBuildOptions struct {
 	Dockerfile     string
 	Ulimits        []*units.Ulimit
 	BuildArgs      map[string]string
+	Secrets        []secret.Secret
 	AuthConfigs    map[string]AuthConfig
 	Context        io.Reader
 	Labels         map[string]string
