@@ -3,7 +3,7 @@ package formatter
 import (
 	"bytes"
 
-	"github.com/docker/engine-api/types"
+	"github.com/docker/engine-api/types/secret"
 )
 
 const (
@@ -17,7 +17,7 @@ const (
 type SecretContext struct {
 	Context
 	// Secrets
-	Secrets []*types.Secret
+	Secrets []*secret.Secret
 }
 
 func (ctx SecretContext) Write() {
@@ -59,7 +59,7 @@ func (ctx SecretContext) Write() {
 
 type secretContext struct {
 	baseSubContext
-	s *types.Secret
+	s *secret.Secret
 }
 
 func (c *secretContext) Name() string {

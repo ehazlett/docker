@@ -5,12 +5,12 @@ import (
 	"net/http"
 
 	"github.com/docker/docker/api/server/httputils"
-	enginetypes "github.com/docker/engine-api/types"
+	"github.com/docker/engine-api/types/secret"
 	"golang.org/x/net/context"
 )
 
 func (sr *secretRouter) createSecret(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	var s enginetypes.Secret
+	var s secret.Secret
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
 		return err
 	}
@@ -24,7 +24,7 @@ func (sr *secretRouter) createSecret(ctx context.Context, w http.ResponseWriter,
 func (sr *secretRouter) updateSecret(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
 	id := vars["id"]
 
-	var s enginetypes.Secret
+	var s secret.Secret
 	if err := json.NewDecoder(r.Body).Decode(&s); err != nil {
 		return err
 	}

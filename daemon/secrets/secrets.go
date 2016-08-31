@@ -1,11 +1,11 @@
 package secrets
 
-import "github.com/docker/engine-api/types"
+import "github.com/docker/engine-api/types/secret"
 
 type SecretStore interface {
-	CreateSecret(types.Secret) (*types.Secret, error)
-	ListSecrets() ([]types.Secret, error)
-	InspectSecret(name string) (*types.Secret, error)
-	UpdateSecret(name string, s *types.Secret) error
+	CreateSecret(secret.Secret) (*secret.Secret, error)
+	ListSecrets() ([]secret.Secret, error)
+	InspectSecret(name string) (*secret.Secret, error)
+	UpdateSecret(name string, s *secret.Secret) error
 	RemoveSecret(name string) error
 }

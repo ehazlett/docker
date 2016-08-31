@@ -1,14 +1,14 @@
 package secret
 
 import (
-	"github.com/docker/engine-api/types"
+	"github.com/docker/engine-api/types/secret"
 )
 
 // Backend for Secret
 type Backend interface {
-	CreateSecret(types.Secret) (*types.Secret, error)
-	ListSecrets() ([]types.Secret, error)
-	InspectSecret(id string) (*types.Secret, error)
-	UpdateSecret(id string, s *types.Secret) error
+	CreateSecret(secret.Secret) (*secret.Secret, error)
+	ListSecrets() ([]secret.Secret, error)
+	InspectSecret(id string) (*secret.Secret, error)
+	UpdateSecret(id string, s *secret.Secret) error
 	RemoveSecret(id string) error
 }

@@ -20,6 +20,7 @@ import (
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/streamformatter"
+	"github.com/docker/engine-api/types/secret"
 	"github.com/docker/go-units"
 	"golang.org/x/net/context"
 )
@@ -93,6 +94,14 @@ func newImageBuildOptions(ctx context.Context, r *http.Request) (*types.ImageBui
 		options.Labels = labels
 	}
 
+	var secrets = []secret.Secret{}
+	secretsJSON := r.FormValue("secrets")
+	if secretsJSON != "" {
+		if err := json.NewDecoder(strings.NewReader(secretsJSON)).Decode(&secrets); err != nil {
+			return nil, err
+		}
+		options.Secrets = secrets
+	}
 	return options, nil
 }
 
