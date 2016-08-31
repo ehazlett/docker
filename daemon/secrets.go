@@ -37,12 +37,13 @@ func (daemon *Daemon) setupSecrets(c *container.Container) error {
 		return err
 	}
 
-	// add mountpoint
-	c.MountPoints["secrets"] = &volume.MountPoint{
-		Source:      secretsPath,
-		Destination: secretsContainerMountPath,
-		RW:          false,
+	// add mountpoint if not exists
+	if _, ok := c.MountPoints["/run/secrets"]; !ok {
+		c.MountPoints["secrets"] = &volume.MountPoint{
+			Source:      secretsPath,
+			Destination: secretsContainerMountPath,
+			RW:          false,
+		}
 	}
-
 	return nil
 }

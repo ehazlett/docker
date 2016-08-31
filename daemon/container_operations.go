@@ -994,10 +994,11 @@ func (daemon *Daemon) getSecrets(container *container.Container) (io.Reader, err
 	tw := tar.NewWriter(buf)
 
 	for _, s := range container.Config.Secrets {
-		logrus.Debugf("requesting secret %q for container %s", s, container.ID)
-		secret, err := daemon.secretStore.InspectSecret(s)
+		logrus.Debugf("requesting secret %q for container %s", s.Name, container.ID)
+		secret, err := daemon.secretStore.InspectSecret(s.Name)
 		if err != nil {
-			return nil, err
+			logrus.Warnf("secret: unable to find secret %s in backend", s.Name)
+			continue
 		}
 
 		logrus.Debugf("received secret %s for container %s", secret.Name, container.ID)
