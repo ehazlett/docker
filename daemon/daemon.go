@@ -42,6 +42,7 @@ import (
 	"github.com/docker/docker/pkg/fileutils"
 	"github.com/docker/docker/pkg/graphdb"
 	"github.com/docker/docker/pkg/idtools"
+	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/pkg/progress"
 	"github.com/docker/docker/pkg/registrar"
 	"github.com/docker/docker/pkg/signal"
@@ -809,22 +810,28 @@ func (daemon *Daemon) Mount(container *container.Container) error {
 
 // Unmount unsets the container base filesystem
 func (daemon *Daemon) Unmount(container *container.Container) error {
+	if err := container.RWLayer.Unmount(); err != nil {
+		logrus.Errorf("Error unmounting container %s: %s", container.ID, err)
+		return err
+	}
 	// remove secrets volume if needed
 	if secretsSupported() && len(container.Config.Secrets) > 0 {
 		for _, m := range container.MountPoints {
 			logrus.Debugf("secrets: checking mountpoint for removal %s", m.Name)
 			if m.Destination == secretsContainerMountPath {
 				logrus.Debugf("secrets: removing secret volume %s", m.Name)
+				// unmount tmpfs first
+				logrus.Debugf("secrets: unmounting tmpfs %s", m.Source)
+				if err := mount.Unmount(m.Source); err != nil {
+					return err
+				}
+				logrus.Debugf("secrets: removing volume %s", m.Name)
 				if err := daemon.VolumeRm(m.Name, true); err != nil {
 					return err
 				}
 				break
 			}
 		}
-	}
-	if err := container.RWLayer.Unmount(); err != nil {
-		logrus.Errorf("Error unmounting container %s: %s", container.ID, err)
-		return err
 	}
 	return nil
 }
