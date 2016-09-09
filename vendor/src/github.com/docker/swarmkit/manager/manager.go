@@ -26,6 +26,7 @@ import (
 	"github.com/docker/swarmkit/manager/raftpicker"
 	"github.com/docker/swarmkit/manager/resourceapi"
 	"github.com/docker/swarmkit/manager/scheduler"
+	"github.com/docker/swarmkit/manager/secretsapi"
 	"github.com/docker/swarmkit/manager/state/raft"
 	"github.com/docker/swarmkit/manager/state/store"
 	"github.com/docker/swarmkit/protobuf/ptypes"
@@ -277,11 +278,19 @@ func (m *Manager) Run(parent context.Context) error {
 
 	baseControlAPI := controlapi.NewServer(m.RaftNode.MemoryStore(), m.RaftNode, m.config.SecurityConfig.RootCA())
 	baseResourceAPI := resourceapi.New(m.RaftNode.MemoryStore())
+<<<<<<< HEAD
+=======
+	baseSecretsAPI := secretsapi.NewServer(m.RaftNode.MemoryStore())
+>>>>>>> 28a8c93... secrets: update vendor for secrets
 	healthServer := health.NewHealthServer()
 	localHealthServer := health.NewHealthServer()
 
 	authenticatedControlAPI := api.NewAuthenticatedWrapperControlServer(baseControlAPI, authorize)
 	authenticatedResourceAPI := api.NewAuthenticatedWrapperResourceAllocatorServer(baseResourceAPI, authorize)
+<<<<<<< HEAD
+=======
+	authenticatedSecretsAPI := api.NewAuthenticatedWrapperSecretsServer(baseSecretsAPI, authorize)
+>>>>>>> 28a8c93... secrets: update vendor for secrets
 	authenticatedDispatcherAPI := api.NewAuthenticatedWrapperDispatcherServer(m.Dispatcher, authorize)
 	authenticatedCAAPI := api.NewAuthenticatedWrapperCAServer(m.caserver, authorize)
 	authenticatedNodeCAAPI := api.NewAuthenticatedWrapperNodeCAServer(m.caserver, authorize)
@@ -303,6 +312,7 @@ func (m *Manager) Run(parent context.Context) error {
 	// information to put in the metadata map).
 	forwardAsOwnRequest := func(ctx context.Context) (context.Context, error) { return ctx, nil }
 	localProxyControlAPI := api.NewRaftProxyControlServer(baseControlAPI, controlAPIConnSelector, m.RaftNode, forwardAsOwnRequest)
+	localProxySecretsAPI := api.NewRaftProxySecretsServer(baseSecretsAPI, controlAPIConnSelector, m.RaftNode, forwardAsOwnRequest)
 
 	// Everything registered on m.server should be an authenticated
 	// wrapper, or a proxy wrapping an authenticated wrapper!
@@ -312,6 +322,11 @@ func (m *Manager) Run(parent context.Context) error {
 	api.RegisterHealthServer(m.server, authenticatedHealthAPI)
 	api.RegisterRaftMembershipServer(m.server, proxyRaftMembershipAPI)
 	api.RegisterControlServer(m.server, authenticatedControlAPI)
+<<<<<<< HEAD
+=======
+	api.RegisterSecretsServer(m.localserver, localProxySecretsAPI)
+	api.RegisterSecretsServer(m.server, authenticatedSecretsAPI)
+>>>>>>> 28a8c93... secrets: update vendor for secrets
 	api.RegisterResourceAllocatorServer(m.server, proxyResourceAPI)
 	api.RegisterDispatcherServer(m.server, proxyDispatcherAPI)
 

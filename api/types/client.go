@@ -291,6 +291,11 @@ type ServiceListOptions struct {
 	Filter filters.Args
 }
 
+// SecretListOptions holds parameters to list secrets with.
+type SecretListOptions struct {
+	Filter filters.Args
+}
+
 // TaskListOptions holds parameters to list  tasks with.
 type TaskListOptions struct {
 	Filter filters.Args

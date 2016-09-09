@@ -30,7 +30,7 @@ type PluginAPIClient interface {
 	PluginInstall(ctx context.Context, name string, options types.PluginInstallOptions) error
 	PluginPush(ctx context.Context, name string, registryAuth string) error
 	PluginSet(ctx context.Context, name string, args []string) error
-	PluginInspectWithRaw(ctx context.Context, name string) (*types.Plugin, []byte, error)
+	PluginInspect(ctx context.Context, name string) (*types.Plugin, error)
 }
 
 // Ensure that Client always implements APIClient.

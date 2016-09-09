@@ -1,6 +1,7 @@
 package agent
 
 import (
+	"fmt"
 	"sync"
 
 	"github.com/Sirupsen/logrus"
@@ -17,9 +18,21 @@ type Worker interface {
 	// Init prepares the worker for task assignment.
 	Init(ctx context.Context) error
 
-	// Assign the set of tasks to the worker. Tasks outside of this set will be
-	// removed.
-	Assign(ctx context.Context, tasks []*api.Task) error
+	// AssignTasks assigns a complete set of tasks to a worker. Any task not included in
+	// this set will be removed.
+	AssignTasks(ctx context.Context, tasks []*api.Task) error
+
+	// UpdateTasks updates an incremental set of tasks to the worker. Any task not included
+	// either in added or removed will remain untouched.
+	UpdateTasks(ctx context.Context, added []*api.Task, removed []string) error
+
+	// Assign a complete set of secrets to a worker. Any secret not included in
+	// this set will be removed.
+	AssignSecrets(ctx context.Context, secrets []*api.Secret) error
+
+	// UpdateSecrets updates an incremental set of secrets to the worker. Any secret not included
+	// either in added or removed will remain untouched.
+	UpdateSecrets(ctx context.Context, added []*api.Secret, removed []string) error
 
 	// Listen to updates about tasks controlled by the worker. When first
 	// called, the reporter will receive all updates for all tasks controlled
@@ -27,6 +40,9 @@ type Worker interface {
 	//
 	// The listener will be removed if the context is cancelled.
 	Listen(ctx context.Context, reporter StatusReporter)
+
+	// GetSecret returns a secret from the local cache
+	GetSecret(name string) (*api.Secret, error)
 }
 
 // statusReporterKey protects removal map from panic.
@@ -38,17 +54,19 @@ type worker struct {
 	db        *bolt.DB
 	executor  exec.Executor
 	listeners map[*statusReporterKey]struct{}
+	secrets   *Secrets
 
 	taskManagers map[string]*taskManager
 	mu           sync.RWMutex
 }
 
-func newWorker(db *bolt.DB, executor exec.Executor) *worker {
+func newWorker(db *bolt.DB, executor exec.Executor, secrets *Secrets) *worker {
 	return &worker{
 		db:           db,
 		executor:     executor,
 		listeners:    make(map[*statusReporterKey]struct{}),
 		taskManagers: make(map[string]*taskManager),
+		secrets:      secrets,
 	}
 }
 
@@ -86,14 +104,37 @@ func (w *worker) Init(ctx context.Context) error {
 	})
 }
 
-// Assign the set of tasks to the worker. Any tasks not previously known will
+// AssignTasks assigns  the set of tasks to the worker. Any tasks not previously known will
 // be started. Any tasks that are in the task set and already running will be
 // updated, if possible. Any tasks currently running on the
 // worker outside the task set will be terminated.
-func (w *worker) Assign(ctx context.Context, tasks []*api.Task) error {
+func (w *worker) AssignTasks(ctx context.Context, tasks []*api.Task) error {
 	w.mu.Lock()
 	defer w.mu.Unlock()
 
+	log.G(ctx).WithFields(logrus.Fields{
+		"len(tasks)": len(tasks),
+	}).Debug("(*worker).AssignTasks")
+
+	return reconcileTaskState(ctx, w, tasks, nil, true)
+}
+
+// UpdateTasks the set of tasks to the worker.
+// Tasks in the added set will be added to the worker, and tasks in the removed set
+// will be removed from the worker
+func (w *worker) UpdateTasks(ctx context.Context, added []*api.Task, removed []string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	log.G(ctx).WithFields(logrus.Fields{
+		"len(added)":   len(added),
+		"len(removed)": len(removed),
+	}).Debug("(*worker).UpdateTasks")
+
+	return reconcileTaskState(ctx, w, added, removed, false)
+}
+
+func reconcileTaskState(ctx context.Context, w *worker, added []*api.Task, removed []string, fullSnapshot bool) error {
 	tx, err := w.db.Begin(true)
 	if err != nil {
 		log.G(ctx).WithError(err).Error("failed starting transaction against task database")
@@ -101,10 +142,9 @@ func (w *worker) Assign(ctx context.Context, tasks []*api.Task) error {
 	}
 	defer tx.Rollback()
 
-	log.G(ctx).WithField("len(tasks)", len(tasks)).Debug("(*worker).Assign")
 	assigned := map[string]struct{}{}
 
-	for _, task := range tasks {
+	for _, task := range added {
 		log.G(ctx).WithFields(
 			logrus.Fields{
 				"task.id":           task.ID,
@@ -135,38 +175,113 @@ func (w *worker) Assign(ctx context.Context, tasks []*api.Task) error {
 					return err
 				}
 			} else {
-				task.Status = *status // overwrite the stale manager status with ours.
+				task.Status = *status
 			}
-
 			w.startTask(ctx, tx, task)
 		}
 
 		assigned[task.ID] = struct{}{}
 	}
 
-	for id, tm := range w.taskManagers {
-		if _, ok := assigned[id]; ok {
-			continue
+	closeManager := func(tm *taskManager) {
+		// when a task is no longer assigned, we shutdown the task manager for
+		// it and leave cleanup to the sweeper.
+		if err := tm.Close(); err != nil {
+			log.G(ctx).WithError(err).Error("error closing task manager")
 		}
+	}
 
-		ctx := log.WithLogger(ctx, log.G(ctx).WithField("task.id", id))
-		if err := SetTaskAssignment(tx, id, false); err != nil {
+	removeTaskAssignment := func(taskID string) error {
+		ctx := log.WithLogger(ctx, log.G(ctx).WithField("task.id", taskID))
+		if err := SetTaskAssignment(tx, taskID, false); err != nil {
 			log.G(ctx).WithError(err).Error("error setting task assignment in database")
-			continue
 		}
+		return err
+	}
 
-		delete(w.taskManagers, id)
-
-		go func(tm *taskManager) {
-			// when a task is no longer assigned, we shutdown the task manager for
-			// it and leave cleanup to the sweeper.
-			if err := tm.Close(); err != nil {
-				log.G(ctx).WithError(err).Error("error closing task manager")
+	// If this was a complete set of assignments, we're going to remove all the remaining
+	// tasks.
+	if fullSnapshot {
+		for id, tm := range w.taskManagers {
+			if _, ok := assigned[id]; ok {
+				continue
 			}
-		}(tm)
+
+			err := removeTaskAssignment(id)
+			if err == nil {
+				delete(w.taskManagers, id)
+				go closeManager(tm)
+			}
+		}
+	} else {
+		// If this was an incremental set of assignments, we're going to remove only the tasks
+		// in the removed set
+		for _, taskID := range removed {
+			err := removeTaskAssignment(taskID)
+			if err != nil {
+				continue
+			}
+
+			tm, ok := w.taskManagers[taskID]
+			if ok {
+				delete(w.taskManagers, taskID)
+				go closeManager(tm)
+			}
+		}
 	}
 
 	return tx.Commit()
+}
+
+// AssignSecrets assigns the set of secrets to the worker. Any secrets not in this set
+// will be removed.
+func (w *worker) AssignSecrets(ctx context.Context, secrets []*api.Secret) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	log.G(ctx).WithFields(logrus.Fields{
+		"len(secrets)": len(secrets),
+	}).Debug("(*worker).AssignSecrets")
+
+	return reconcileSecrets(ctx, w, secrets, nil, true)
+}
+
+// UpdateSecrets updates the set of secrets assigned to the worker.
+// Serets in the added set will be added to the worker, and secrets in the removed set
+// will be removed from the worker.
+func (w *worker) UpdateSecrets(ctx context.Context, added []*api.Secret, removed []string) error {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	log.G(ctx).WithFields(logrus.Fields{
+		"len(added)":   len(added),
+		"len(removed)": len(removed),
+	}).Debug("(*worker).UpdateSecrets")
+
+	return reconcileSecrets(ctx, w, added, removed, false)
+}
+
+func reconcileSecrets(ctx context.Context, w *worker, added []*api.Secret, removed []string, fullSnapshot bool) error {
+	// If this was a complete set of secrets, we're going to clear the secrets map and add all of them
+	w.secrets.RLock()
+	defer w.secrets.RUnlock()
+	if fullSnapshot {
+		w.secrets.m = make(map[string]*api.Secret)
+		for _, secret := range added {
+			w.secrets.m[secret.Name] = secret
+		}
+	} else {
+		// If this was an incremental set of secrets, we're going to remove only the tasks
+		// in the removed set
+		for _, secret := range added {
+			w.secrets.m[secret.Name] = secret
+		}
+		for _, name := range removed {
+			delete(w.secrets.m, name)
+		}
+	}
+
+	return nil
 }
 
 func (w *worker) Listen(ctx context.Context, reporter StatusReporter) {
@@ -255,4 +370,12 @@ func (w *worker) updateTaskStatus(ctx context.Context, tx *bolt.Tx, taskID strin
 	}
 
 	return nil
+}
+
+func (w *worker) GetSecret(name string) (*api.Secret, error) {
+	if s, ok := w.secrets.m[name]; ok {
+		return s, nil
+	}
+
+	return nil, fmt.Errorf("secret not available in store")
 }

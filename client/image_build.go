@@ -110,6 +110,12 @@ func imageBuildOptionsToQuery(options types.ImageBuildOptions) (url.Values, erro
 		return query, err
 	}
 	query.Set("labels", string(labelsJSON))
+
+	secretsJSON, err := json.Marshal(options.Secrets)
+	if err != nil {
+		return query, err
+	}
+	query.Set("secrets", string(secretsJSON))
 	return query, nil
 }
 

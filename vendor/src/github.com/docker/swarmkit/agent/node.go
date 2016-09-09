@@ -393,6 +393,10 @@ func (n *Node) Ready() <-chan struct{} {
 	return n.ready
 }
 
+func (n *Node) GetSecret(name string) (*api.Secret, error) {
+	return n.agent.GetSecret(name)
+}
+
 // CertificateRequested returns a channel that is closed after node has
 // requested a certificate. After this call a caller can expect calls to
 // NodeID() and `NodeMembership()` to succeed.
