@@ -28,6 +28,7 @@ import (
 	"github.com/docker/docker/daemon"
 	"github.com/docker/docker/daemon/cluster"
 	"github.com/docker/docker/daemon/logger"
+	"github.com/docker/docker/daemon/secrets/swarm"
 	"github.com/docker/docker/dockerversion"
 	"github.com/docker/docker/libcontainerd"
 	dopts "github.com/docker/docker/opts"
@@ -262,6 +263,9 @@ func (cli *DaemonCli) start(opts daemonOptions) (err error) {
 		logrus.Fatalf("Error creating cluster component: %v", err)
 	}
 
+	time.Sleep(500 * time.Millisecond)
+	d.SetSecretStore(swarm.NewSecretStore(c))
+
 	logrus.Info("Daemon has completed initialization")
 
 	logrus.WithFields(logrus.Fields{
@@ -417,6 +421,21 @@ func initRouter(s *apiserver.Server, d *daemon.Daemon, c *cluster.Cluster) {
 	}
 
 	s.InitRouter(utils.IsDebugEnabled(), routers...)
+}
+
+func initSecretStore(d *daemon.Daemon, c *cluster.Cluster) error {
+	logrus.Debug("initializing secret store")
+	// TODO: is there a better way to detect an active swarm?
+	info, err := d.SystemInfo()
+	if err != nil {
+		return err
+	}
+	if info.Swarm.NodeID != "" {
+		logrus.Debugf("secrets: using swarm secret store")
+		d.SetSecretStore(swarm.NewSecretStore(c))
+	}
+
+	return nil
 }
 
 func (cli *DaemonCli) initMiddlewares(s *apiserver.Server, cfg *apiserver.Config) {
