@@ -6,6 +6,10 @@ import (
 	"github.com/docker/engine-api/types/secret"
 )
 
+const (
+	storeName = "builtin"
+)
+
 var ErrSecretNotFound = errors.New("unable to find secret")
 
 // BuiltinSecretStore is currently just an in memory store for debug
@@ -19,6 +23,10 @@ func NewSecretStore(sharedKey string) BuiltinSecretStore {
 		sharedKey: sharedKey,
 		secrets:   map[string]secret.Secret{},
 	}
+}
+
+func (s BuiltinSecretStore) Name() string {
+	return storeName
 }
 
 func (s BuiltinSecretStore) CreateSecret(secret secret.Secret) (*secret.Secret, error) {

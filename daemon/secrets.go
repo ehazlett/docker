@@ -1,15 +1,18 @@
 package daemon
 
 import (
+	"errors"
 	"fmt"
 	"path/filepath"
 
 	"github.com/Sirupsen/logrus"
 	"github.com/cloudflare/cfssl/log"
 	"github.com/docker/docker/container"
+	"github.com/docker/docker/daemon/secrets"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/volume"
+	"github.com/docker/engine-api/types/secret"
 )
 
 const (
@@ -17,8 +20,33 @@ const (
 	secretsVolumeLabel = "com.docker.secrets.container"
 )
 
+var (
+	ErrSecretStoreNotInitialized = errors.New("secret store is not initialized")
+)
+
 func secretsMountPath(c *container.Container) string {
 	return filepath.Join(c.Root, "secrets")
+}
+
+// TODO: remove
+//func initSecretStore(d *Daemon) error {
+//	d.secretStore = builtin.NewSecretStore("changeme")
+//	// TODO: is there a better way to detect an active swarm?
+//	info, err := d.SystemInfo()
+//	if err != nil {
+//		return err
+//	}
+//	if info.Swarm.NodeID != "" {
+//		logrus.Debugf("secrets: using swarm secret store")
+//		d.secretStore = swarm.NewSecretStore()
+//	}
+//
+//	return nil
+//}
+
+func (daemon *Daemon) SetSecretStore(s secrets.SecretStore) {
+	logrus.Debugf("daemon: setting secret store %s", s.Name())
+	daemon.secretStore = s
 }
 
 func (daemon *Daemon) setupSecrets(c *container.Container) error {
@@ -27,7 +55,8 @@ func (daemon *Daemon) setupSecrets(c *container.Container) error {
 		return err
 	}
 
-	m, ok := c.MountPoints[secretsContainerMountPath]
+	secretsMountPath := secrets.SecretsContainerMountpath()
+	m, ok := c.MountPoints[secretsMountPath]
 	if !ok {
 		opts := map[string]string{
 			"type":   "tmpfs",
@@ -49,10 +78,10 @@ func (daemon *Daemon) setupSecrets(c *container.Container) error {
 		m = &volume.MountPoint{
 			Name:        vol.Name,
 			Source:      vol.Mountpoint,
-			Destination: secretsContainerMountPath,
+			Destination: secretsMountPath,
 			RW:          false,
 		}
-		c.MountPoints[secretsContainerMountPath] = m
+		c.MountPoints[secretsMountPath] = m
 
 		if c.Config.Labels == nil {
 			c.Config.Labels = map[string]string{}
@@ -72,4 +101,11 @@ func (daemon *Daemon) setupSecrets(c *container.Container) error {
 		return err
 	}
 	return nil
+}
+
+func (daemon *Daemon) InspectSecret(id string) (*secret.Secret, error) {
+	if daemon.secretStore == nil {
+		return nil, ErrSecretStoreNotInitialized
+	}
+	return daemon.secretStore.InspectSecret(id)
 }

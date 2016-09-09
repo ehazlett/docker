@@ -455,7 +455,7 @@ func (daemon *Daemon) IsSwarmCompatible() error {
 
 // NewDaemon sets up everything for the daemon to be able to service
 // requests from the webserver.
-func NewDaemon(config *Config, registryService registry.Service, containerdRemote libcontainerd.Remote, secretStore secrets.SecretStore) (daemon *Daemon, err error) {
+func NewDaemon(config *Config, registryService registry.Service, containerdRemote libcontainerd.Remote) (daemon *Daemon, err error) {
 	setDefaultMtu(config)
 
 	// Ensure that we have a correct root key limit for launching containers.
@@ -663,7 +663,6 @@ func NewDaemon(config *Config, registryService registry.Service, containerdRemot
 		Config: config.LogConfig.Config,
 	}
 	d.RegistryService = registryService
-	d.secretStore = secretStore
 	d.EventsService = eventsService
 	d.volumes = volStore
 	d.root = config.Root
@@ -815,10 +814,10 @@ func (daemon *Daemon) Unmount(container *container.Container) error {
 		return err
 	}
 	// remove secrets volume if needed
-	if secretsSupported() && len(container.Config.Secrets) > 0 {
+	if secrets.SecretsSupported() && len(container.Config.Secrets) > 0 {
 		for _, m := range container.MountPoints {
 			logrus.Debugf("secrets: checking mountpoint for removal %s", m.Name)
-			if m.Destination == secretsContainerMountPath {
+			if m.Destination == secrets.SecretsContainerMountpath() {
 				logrus.Debugf("secrets: removing secret volume %s", m.Name)
 				// unmount tmpfs first
 				logrus.Debugf("secrets: unmounting tmpfs %s", m.Source)
