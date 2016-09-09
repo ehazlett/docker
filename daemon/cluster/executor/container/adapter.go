@@ -15,6 +15,10 @@ import (
 	"github.com/docker/docker/api/types/events"
 	"github.com/docker/docker/api/types/versions"
 	executorpkg "github.com/docker/docker/daemon/cluster/executor"
+	"github.com/docker/engine-api/types"
+	"github.com/docker/engine-api/types/events"
+	"github.com/docker/engine-api/types/secret"
+	"github.com/docker/engine-api/types/versions"
 	"github.com/docker/libnetwork"
 	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/log"
@@ -188,9 +192,23 @@ func (c *containerAdapter) create(ctx context.Context) error {
 	version := httputils.VersionFromContext(ctx)
 	validateHostname := versions.GreaterThanOrEqualTo(version, "1.24")
 
+	config := c.container.config()
+	// secrets
+	if len(config.Secrets) == 0 {
+		config.Secrets = []secret.Secret{}
+	}
+	for _, s := range c.container.spec().Secrets {
+		logrus.Debugf("secrets: updating container config with secret %s", s.Name)
+		config.Secrets = append(config.Secrets, secret.Secret{
+			ID:         s.Name,
+			Name:       s.Name,
+			Mountpoint: s.Target,
+		})
+	}
+
 	if cr, err = c.backend.CreateManagedContainer(types.ContainerCreateConfig{
 		Name:       c.container.name(),
-		Config:     c.container.config(),
+		Config:     config,
 		HostConfig: c.container.hostConfig(),
 		// Use the first network in container create
 		NetworkingConfig: c.container.createNetworkingConfig(),

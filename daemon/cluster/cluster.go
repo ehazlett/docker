@@ -22,6 +22,8 @@ import (
 	"github.com/docker/docker/daemon/cluster/convert"
 	executorpkg "github.com/docker/docker/daemon/cluster/executor"
 	"github.com/docker/docker/daemon/cluster/executor/container"
+	swarmsecrets "github.com/docker/docker/daemon/secrets/swarm"
+	"github.com/docker/docker/errors"
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/signal"
@@ -184,6 +186,12 @@ func New(config Config) (*Cluster, error) {
 		return nil, err
 	}
 
+	time.Sleep(300 * time.Millisecond)
+
+	if err := c.initSecretStore(); err != nil {
+		return nil, err
+	}
+
 	select {
 	case <-time.After(swarmConnectTimeout):
 		logrus.Errorf("swarm component could not be started before timeout was reached")
@@ -191,6 +199,7 @@ func New(config Config) (*Cluster, error) {
 	case <-n.done:
 		return nil, fmt.Errorf("swarm component could not be started: %v", c.err)
 	}
+
 	go c.reconnectOnFailure(n)
 	return c, nil
 }
@@ -258,6 +267,7 @@ func (c *Cluster) reconnectOnFailure(n *node) {
 			c.err = err
 			close(n.done)
 		}
+
 		c.Unlock()
 	}
 }
@@ -374,6 +384,15 @@ func (c *Cluster) startNewNode(forceNewCluster bool, localAddr, remoteAddr, list
 	}()
 
 	return node, nil
+}
+
+func (c *Cluster) initSecretStore() error {
+	logrus.Debugf("cluster: initilizing secret store with conn %+v", c.conn)
+	secretsClient := swarmapi.NewSecretsClient(c.conn)
+	secretStore := swarmsecrets.NewSecretStore(secretsClient)
+	c.config.Backend.SetSecretStore(secretStore)
+
+	return nil
 }
 
 // Init initializes new cluster from user provided request.
@@ -1615,4 +1634,38 @@ func initClusterSpec(node *node, spec types.Spec) error {
 		}
 	}
 	return ctx.Err()
+}
+
+// GetSecrets returns all secrets of a managed swarm cluster.
+func (c *Cluster) GetSecrets(options apitypes.SecretListOptions) ([]types.Secret, error) {
+	c.RLock()
+	defer c.RUnlock()
+
+	if !c.isActiveManager() {
+		return nil, c.errNoManager()
+	}
+
+	filters, err := newListSecretsFilters(options.Filter)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := c.getRequestContext()
+	defer cancel()
+
+	client := swarmapi.NewSecretsClient(c.conn)
+	r, err := client.ListSecrets(
+		ctx,
+		&swarmapi.ListSecretsRequest{Filters: filters},
+	)
+	if err != nil {
+		return nil, err
+	}
+
+	secrets := []types.Secret{}
+
+	for _, s := range r.Secrets {
+		secrets = append(secrets, convert.SecretFromGRPC(s))
+	}
+
+	return secrets, nil
 }
