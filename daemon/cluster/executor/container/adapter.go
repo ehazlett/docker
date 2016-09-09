@@ -199,11 +199,18 @@ func (c *containerAdapter) create(ctx context.Context) error {
 	}
 	for _, s := range c.container.spec().Secrets {
 		logrus.Debugf("secrets: updating container config with secret %s", s.Name)
-		config.Secrets = append(config.Secrets, secret.Secret{
+		sec := secret.Secret{
 			ID:         s.Name,
 			Name:       s.Name,
 			Mountpoint: s.Target,
-		})
+		}
+		switch s.Mode {
+		case api.SecretReference_ENV:
+			sec.Mode = secret.SecretModeEnv
+		default:
+			sec.Mode = secret.SecretModeFile
+		}
+		config.Secrets = append(config.Secrets, sec)
 	}
 
 	if cr, err = c.backend.CreateManagedContainer(types.ContainerCreateConfig{

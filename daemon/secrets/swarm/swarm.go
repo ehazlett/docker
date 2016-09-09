@@ -1,13 +1,12 @@
 package swarm
 
 import (
-	"context"
 	"errors"
 	"fmt"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/docker/daemon/cluster"
 	"github.com/docker/engine-api/types/secret"
-	swarmapi "github.com/docker/swarmkit/api"
 )
 
 const (
@@ -18,13 +17,13 @@ var ErrSecretNotFound = errors.New("unable to find secret")
 
 // SwarmSecretStore is currently just an in memory store for debug
 type SwarmSecretStore struct {
-	client swarmapi.SecretsClient
+	c *cluster.Cluster
 }
 
-func NewSecretStore(c swarmapi.SecretsClient) *SwarmSecretStore {
+func NewSecretStore(c *cluster.Cluster) *SwarmSecretStore {
 	logrus.Debugf("secrets: initializing swarm secret store %+v", c)
 	return &SwarmSecretStore{
-		client: c,
+		c: c,
 	}
 }
 
@@ -48,15 +47,13 @@ func (s *SwarmSecretStore) ListSecrets() ([]secret.Secret, error) {
 	return all, nil
 }
 func (s *SwarmSecretStore) InspectSecret(id string) (*secret.Secret, error) {
-	logrus.Debugf("secret store: looking up secret %s in swarm", id)
-	r, err := s.client.GetSecret(context.Background(), &swarmapi.GetSecretRequest{Name: id})
+	sec, err := s.c.GetSecret(id)
 	if err != nil {
 		return nil, err
 	}
 
-	logrus.Debugf("secrets: found secret in backend: %+v", r)
+	logrus.Debugf("secrets: found secret %s in backend", sec.Name)
 
-	sec := r.Secret
 	rev, ok := sec.SecretData[sec.LatestVersion]
 	if !ok {
 		return nil, fmt.Errorf("unable to find latest revision of secret")
@@ -67,6 +64,7 @@ func (s *SwarmSecretStore) InspectSecret(id string) (*secret.Secret, error) {
 		Data: rev.Spec.Data,
 	}, nil
 }
+
 func (s *SwarmSecretStore) UpdateSecret(id string, secret *secret.Secret) error {
 	return nil
 }
