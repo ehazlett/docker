@@ -1,11 +1,11 @@
 // +build linux
 
-package daemon
+package secrets
 
 const (
 	secretsContainerMountPath = "/run/secrets"
 )
 
-func secretsSupported() bool {
+func SecretsSupported() bool {
 	return true
 }

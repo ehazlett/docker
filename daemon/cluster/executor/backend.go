@@ -10,6 +10,12 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	clustertypes "github.com/docker/docker/daemon/cluster/provider"
+	"github.com/docker/docker/daemon/secrets"
+	"github.com/docker/engine-api/types"
+	"github.com/docker/engine-api/types/container"
+	"github.com/docker/engine-api/types/events"
+	"github.com/docker/engine-api/types/filters"
+	"github.com/docker/engine-api/types/network"
 	"github.com/docker/libnetwork"
 	"github.com/docker/libnetwork/cluster"
 	networktypes "github.com/docker/libnetwork/types"
@@ -42,4 +48,5 @@ type Backend interface {
 	UnsubscribeFromEvents(listener chan interface{})
 	UpdateAttachment(string, string, string, *network.NetworkingConfig) error
 	WaitForDetachment(context.Context, string, string, string, string) error
+	SetSecretStore(store secrets.SecretStore)
 }

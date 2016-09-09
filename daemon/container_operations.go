@@ -916,7 +916,7 @@ func (daemon *Daemon) getSecrets(container *container.Container) (io.Reader, err
 
 	for _, s := range container.Config.Secrets {
 		logrus.Debugf("requesting secret %q for container %s", s.Name, container.ID)
-		secret, err := daemon.secretStore.InspectSecret(s.Name)
+		secret, err := daemon.InspectSecret(s.Name)
 		if err != nil {
 			logrus.Warnf("secret: unable to find secret %s in backend", s.Name)
 			continue
@@ -925,7 +925,7 @@ func (daemon *Daemon) getSecrets(container *container.Container) (io.Reader, err
 		logrus.Debugf("received secret %s for container %s", secret.Name, container.ID)
 
 		h := &tar.Header{
-			Name: secret.Mountpoint,
+			Name: s.Mountpoint,
 			Mode: 0600,
 			Size: int64(len(secret.Data)),
 		}
@@ -933,7 +933,7 @@ func (daemon *Daemon) getSecrets(container *container.Container) (io.Reader, err
 			return nil, err
 
 		}
-		if _, err := tw.Write([]byte(secret.Data)); err != nil {
+		if _, err := tw.Write(secret.Data); err != nil {
 			return nil, err
 		}
 	}

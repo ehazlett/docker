@@ -13,6 +13,7 @@ import (
 	containertypes "github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/daemon/caps"
+	"github.com/docker/docker/daemon/secrets"
 	"github.com/docker/docker/libcontainerd"
 	"github.com/docker/docker/oci"
 	"github.com/docker/docker/pkg/idtools"
@@ -649,7 +650,7 @@ func (daemon *Daemon) createSpec(c *container.Container) (*libcontainerd.Spec, e
 		return nil, err
 	}
 
-	if secretsSupported() && len(c.Config.Secrets) > 0 {
+	if secrets.SecretsSupported() && len(c.Config.Secrets) > 0 {
 		if err := daemon.setupSecrets(c); err != nil {
 			return nil, err
 		}
