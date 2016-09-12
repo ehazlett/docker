@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"github.com/docker/docker/api/client/secret"
 	"github.com/docker/docker/cli/command"
 	"github.com/docker/docker/cli/command/checkpoint"
 	"github.com/docker/docker/cli/command/container"
@@ -42,7 +41,6 @@ func AddCommands(cmd *cobra.Command, dockerCli *command.DockerCli) {
 		container.NewRestartCommand(dockerCli),
 		container.NewRmCommand(dockerCli),
 		container.NewRunCommand(dockerCli),
-		secret.NewSecretCommand(dockerCli),
 		container.NewStartCommand(dockerCli),
 		container.NewStatsCommand(dockerCli),
 		container.NewStopCommand(dockerCli),
