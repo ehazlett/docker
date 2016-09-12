@@ -3,8 +3,8 @@ package container
 import (
 	"time"
 
-	"github.com/docker/engine-api/types/secret"
-	"github.com/docker/engine-api/types/strslice"
+	"github.com/docker/docker/api/types/secret"
+	"github.com/docker/docker/api/types/strslice"
 	"github.com/docker/go-connections/nat"
 )
 

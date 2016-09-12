@@ -414,7 +414,6 @@ func initRouter(s *apiserver.Server, d *daemon.Daemon, c *cluster.Cluster) {
 		volume.NewRouter(d),
 		build.NewRouter(dockerfile.NewBuildManager(d)),
 		swarmrouter.NewRouter(c),
-		secretrouter.NewRouter(ss),
 	}...)
 	if d.NetworkControllerEnabled() {
 		routers = append(routers, network.NewRouter(d, c))

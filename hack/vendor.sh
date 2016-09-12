@@ -65,7 +65,7 @@ clone git golang.org/x/net 2beffdc2e92c8a3027590f898fe88f69af48a3f8 https://gith
 clone git golang.org/x/sys eb2c74142fd19a79b3f237334c7384d5167b1b46 https://github.com/golang/sys.git
 clone git github.com/docker/go-units f2145db703495b2e525c59662db69a7344b00bb8
 clone git github.com/docker/go-connections 988efe982fdecb46f01d53465878ff1f2ff411ce
-clone git github.com/docker/engine-api 3b1f95f95b7f5d71545de2ad798707163a49e342 https://github.com/ehazlett/engine-api.git
+clone git github.com/docker/engine-api 86e38ee0a6aebd43c29c79cfebc7ad9594656513 https://github.com/ehazlett/engine-api.git
 clone git github.com/RackSec/srslog 259aed10dfa74ea2961eddd1d9847619f6e98837
 clone git github.com/imdario/mergo 0.2.1
 
@@ -143,8 +143,6 @@ clone git github.com/docker/docker-credential-helpers v0.3.0
 clone git github.com/docker/containerd 4c21ad662f71af56c0e6b29c0afef72df441d1ff
 
 # cluster
-#clone git github.com/docker/swarmkit 8a761950fb4d9251c335dc6149a8a02756cb3b10
-#clone git github.com/docker/swarmkit 75df232b6bb7c0b79f5793eb6f7193dc67951ae3 https://github.com/diogomonica/swarmkit
 clone git github.com/docker/swarmkit ce1849f9fe0ef346ef1eb45522944023beae2750 https://github.com/ehazlett/swarmkit
 clone git github.com/golang/mock bd3c8e81be01eef76d4b503f5e687d2d1354d2d9
 clone git github.com/gogo/protobuf 43a2e0b1c32252bfbbdf81f7faa7a88fb3fa4028

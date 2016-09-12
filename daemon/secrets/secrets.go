@@ -3,7 +3,7 @@ package secrets
 import (
 	"path/filepath"
 
-	"github.com/docker/engine-api/types/secret"
+	"github.com/docker/docker/api/types/secret"
 )
 
 type SecretStore interface {

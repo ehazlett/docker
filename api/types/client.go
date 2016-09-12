@@ -5,9 +5,9 @@ import (
 	"io"
 	"net"
 
-	"github.com/docker/engine-api/types/container"
-	"github.com/docker/engine-api/types/filters"
-	"github.com/docker/engine-api/types/secret"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/docker/api/types/secret"
 	"github.com/docker/go-units"
 )
 

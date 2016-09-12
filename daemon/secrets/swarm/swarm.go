@@ -5,8 +5,8 @@ import (
 	"fmt"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/docker/api/types/secret"
 	"github.com/docker/docker/daemon/cluster"
-	"github.com/docker/engine-api/types/secret"
 )
 
 const (
