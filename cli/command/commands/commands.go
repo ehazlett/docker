@@ -30,7 +30,6 @@ func AddCommands(cmd *cobra.Command, dockerCli *command.DockerCli) {
 		container.NewContainerCommand(dockerCli),
 		image.NewImageCommand(dockerCli),
 		system.NewSystemCommand(dockerCli),
-		container.NewRunCommand(dockerCli),
 		image.NewBuildCommand(dockerCli),
 		network.NewNetworkCommand(dockerCli),
 		hide(system.NewEventsCommand(dockerCli)),
