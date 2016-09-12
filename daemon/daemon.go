@@ -29,8 +29,8 @@ import (
 	"github.com/docker/docker/daemon/events"
 	"github.com/docker/docker/daemon/exec"
 	"github.com/docker/docker/daemon/secrets"
-	"github.com/docker/engine-api/types"
 	"github.com/docker/libnetwork/cluster"
+
 	// register graph drivers
 	_ "github.com/docker/docker/daemon/graphdriver/register"
 	dmetadata "github.com/docker/docker/distribution/metadata"

@@ -10,7 +10,6 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/registry"
-	"github.com/docker/docker/api/types/secret"
 	"github.com/docker/docker/api/types/swarm"
 	"golang.org/x/net/context"
 )
@@ -25,7 +24,6 @@ type CommonAPIClient interface {
 	SwarmAPIClient
 	SystemAPIClient
 	VolumeAPIClient
-	SecretAPIClient
 	ClientVersion() string
 	ServerVersion(ctx context.Context) (types.Version, error)
 	UpdateClientVersion(v string)
@@ -135,13 +133,4 @@ type VolumeAPIClient interface {
 	VolumeInspectWithRaw(ctx context.Context, volumeID string) (types.Volume, []byte, error)
 	VolumeList(ctx context.Context, filter filters.Args) (types.VolumesListResponse, error)
 	VolumeRemove(ctx context.Context, volumeID string, force bool) error
-}
-
-// SecretAPIClient defines API client methods for secret management
-type SecretAPIClient interface {
-	SecretCreate(ctx context.Context, options types.SecretCreateRequest) (secret.Secret, error)
-	SecretInspect(ctx context.Context, secretID string) (secret.Secret, error)
-	SecretInspectWithRaw(ctx context.Context, secretID string) (secret.Secret, []byte, error)
-	SecretList(ctx context.Context) (types.SecretsListResponse, error)
-	SecretRemove(ctx context.Context, secretID string) error
 }

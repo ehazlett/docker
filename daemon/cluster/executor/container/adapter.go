@@ -13,12 +13,9 @@ import (
 	"github.com/docker/docker/api/server/httputils"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/events"
+	"github.com/docker/docker/api/types/secret"
 	"github.com/docker/docker/api/types/versions"
 	executorpkg "github.com/docker/docker/daemon/cluster/executor"
-	"github.com/docker/engine-api/types"
-	"github.com/docker/engine-api/types/events"
-	"github.com/docker/engine-api/types/secret"
-	"github.com/docker/engine-api/types/versions"
 	"github.com/docker/libnetwork"
 	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/log"
@@ -206,9 +203,9 @@ func (c *containerAdapter) create(ctx context.Context) error {
 		}
 		switch s.Mode {
 		case api.SecretReference_ENV:
-			sec.Mode = secret.SecretModeEnv
+			sec.Mode = secret.ModeEnv
 		default:
-			sec.Mode = secret.SecretModeFile
+			sec.Mode = secret.ModeFile
 		}
 		config.Secrets = append(config.Secrets, sec)
 	}

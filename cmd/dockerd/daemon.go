@@ -268,7 +268,8 @@ func (cli *DaemonCli) start(opts daemonOptions) (err error) {
 	// initialized the cluster.
 	d.RestartSwarmContainers()
 
-	// TODO: fix there is a race where the tcp conn in swarmkit is not yet initialized
+	// TODO (ehazlett): there seems to be a race with swarmkit where the
+	// grpc conn is not ready when trying to setup the secret store
 	time.Sleep(500 * time.Millisecond)
 	d.SetSecretStore(swarm.NewSecretStore(c))
 
@@ -420,28 +421,12 @@ func initRouter(s *apiserver.Server, d *daemon.Daemon, c *cluster.Cluster) {
 		volume.NewRouter(d),
 		build.NewRouter(dockerfile.NewBuildManager(d)),
 		swarmrouter.NewRouter(c),
-		secretrouter.NewRouter(ss),
 	}...)
 	if d.NetworkControllerEnabled() {
 		routers = append(routers, network.NewRouter(d, c))
 	}
 
 	s.InitRouter(utils.IsDebugEnabled(), routers...)
-}
-
-func initSecretStore(d *daemon.Daemon, c *cluster.Cluster) error {
-	logrus.Debug("initializing secret store")
-	// TODO: is there a better way to detect an active swarm?
-	info, err := d.SystemInfo()
-	if err != nil {
-		return err
-	}
-	if info.Swarm.NodeID != "" {
-		logrus.Debugf("secrets: using swarm secret store")
-		d.SetSecretStore(swarm.NewSecretStore(c))
-	}
-
-	return nil
 }
 
 func (cli *DaemonCli) initMiddlewares(s *apiserver.Server, cfg *apiserver.Config) {

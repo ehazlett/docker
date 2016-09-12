@@ -10,12 +10,12 @@ import (
 
 	"github.com/Sirupsen/logrus"
 	"github.com/cloudflare/cfssl/log"
+	"github.com/docker/docker/api/types/secret"
 	"github.com/docker/docker/container"
 	"github.com/docker/docker/daemon/secrets"
 	"github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/mount"
 	"github.com/docker/docker/volume"
-	"github.com/docker/engine-api/types/secret"
 )
 
 const (

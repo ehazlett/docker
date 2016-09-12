@@ -5,12 +5,11 @@ import (
 	"os"
 	"time"
 
-	"github.com/docker/engine-api/types/container"
-	"github.com/docker/engine-api/types/mount"
-	"github.com/docker/engine-api/types/network"
-	"github.com/docker/engine-api/types/registry"
-	"github.com/docker/engine-api/types/secret"
-	"github.com/docker/engine-api/types/swarm"
+	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
+	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/registry"
+	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/go-connections/nat"
 )
 
@@ -525,17 +524,4 @@ type Checkpoint struct {
 type Runtime struct {
 	Path string   `json:"path"`
 	Args []string `json:"runtimeArgs,omitempty"`
-}
-
-// SecretsListResponse contains the response for the remote API:
-// GET "/secrets"
-type SecretsListResponse []*secret.Secret
-
-// SecretCreateRequest contains the response for the remote API:
-// POST "/secrets/create"
-type SecretCreateRequest struct {
-	Name       string // Name is the requested name of the secret
-	Data       string // Data is the data of the secret
-	Mountpoint string // Mountpoint is the dest filename in the ramfs
-	Required   bool   // Required means the secret is required to run
 }

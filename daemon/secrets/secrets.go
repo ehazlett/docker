@@ -3,16 +3,12 @@ package secrets
 import (
 	"path/filepath"
 
-	"github.com/docker/engine-api/types/secret"
+	"github.com/docker/docker/api/types/secret"
 )
 
 type SecretStore interface {
 	Name() string
-	CreateSecret(secret.Secret) (*secret.Secret, error)
-	ListSecrets() ([]secret.Secret, error)
 	InspectSecret(name string) (*secret.Secret, error)
-	UpdateSecret(name string, s *secret.Secret) error
-	RemoveSecret(name string) error
 }
 
 func SecretsContainerMountpath() string {

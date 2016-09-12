@@ -696,12 +696,12 @@ func (daemon *Daemon) createSpec(c *container.Container) (*libcontainerd.Spec, e
 				return nil, err
 			}
 
-			hooks := specs.Hooks{}
-			hooks.Prestart = []specs.Hook{{
-				Path: target, // FIXME: cross-platform
-				Args: []string{"libnetwork-setkey", c.ID, daemon.netController.ID()},
-			}}
-			s.Hooks = hooks
+			s.Hooks = specs.Hooks{
+				Prestart: []specs.Hook{{
+					Path: target, // FIXME: cross-platform
+					Args: []string{"libnetwork-setkey", c.ID, daemon.netController.ID()},
+				}},
+			}
 		}
 	}
 
