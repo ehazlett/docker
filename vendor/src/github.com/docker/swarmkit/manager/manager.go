@@ -278,19 +278,13 @@ func (m *Manager) Run(parent context.Context) error {
 
 	baseControlAPI := controlapi.NewServer(m.RaftNode.MemoryStore(), m.RaftNode, m.config.SecurityConfig.RootCA())
 	baseResourceAPI := resourceapi.New(m.RaftNode.MemoryStore())
-<<<<<<< HEAD
-=======
 	baseSecretsAPI := secretsapi.NewServer(m.RaftNode.MemoryStore())
->>>>>>> 28a8c93... secrets: update vendor for secrets
 	healthServer := health.NewHealthServer()
 	localHealthServer := health.NewHealthServer()
 
 	authenticatedControlAPI := api.NewAuthenticatedWrapperControlServer(baseControlAPI, authorize)
 	authenticatedResourceAPI := api.NewAuthenticatedWrapperResourceAllocatorServer(baseResourceAPI, authorize)
-<<<<<<< HEAD
-=======
 	authenticatedSecretsAPI := api.NewAuthenticatedWrapperSecretsServer(baseSecretsAPI, authorize)
->>>>>>> 28a8c93... secrets: update vendor for secrets
 	authenticatedDispatcherAPI := api.NewAuthenticatedWrapperDispatcherServer(m.Dispatcher, authorize)
 	authenticatedCAAPI := api.NewAuthenticatedWrapperCAServer(m.caserver, authorize)
 	authenticatedNodeCAAPI := api.NewAuthenticatedWrapperNodeCAServer(m.caserver, authorize)
@@ -322,11 +316,8 @@ func (m *Manager) Run(parent context.Context) error {
 	api.RegisterHealthServer(m.server, authenticatedHealthAPI)
 	api.RegisterRaftMembershipServer(m.server, proxyRaftMembershipAPI)
 	api.RegisterControlServer(m.server, authenticatedControlAPI)
-<<<<<<< HEAD
-=======
 	api.RegisterSecretsServer(m.localserver, localProxySecretsAPI)
 	api.RegisterSecretsServer(m.server, authenticatedSecretsAPI)
->>>>>>> 28a8c93... secrets: update vendor for secrets
 	api.RegisterResourceAllocatorServer(m.server, proxyResourceAPI)
 	api.RegisterDispatcherServer(m.server, proxyDispatcherAPI)
 
