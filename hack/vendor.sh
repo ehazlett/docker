@@ -147,6 +147,7 @@ clone git github.com/docker/containerd 2545227b0357eb55e369fa0072baef9ad91cdb69
 <<<<<<< HEAD
 <<<<<<< HEAD
 <<<<<<< HEAD
+<<<<<<< HEAD
 clone git github.com/docker/swarmkit 7b202f058db2f3a7d41351a56e5ef720c9b5a45d
 =======
 <<<<<<< HEAD
@@ -164,6 +165,9 @@ clone git github.com/docker/swarmkit ce1849f9fe0ef346ef1eb45522944023beae2750 ht
 >>>>>>> 40d3b9e... secrets: refactor for engine-api -> docker/api
 clone git github.com/docker/swarmkit ce1849f9fe0ef346ef1eb45522944023beae2750 https://github.com/ehazlett/swarmkit
 >>>>>>> f99fc4e... secrets: remove secret cli commands; update vendor
+=======
+clone git github.com/docker/swarmkit a690d51c2c16947b0f1d5929c6b4440af309ccb8 https://github.com/ehazlett/swarmkit
+>>>>>>> 8bb9216... secrets: update swarmkit in vendor.sh
 clone git github.com/golang/mock bd3c8e81be01eef76d4b503f5e687d2d1354d2d9
 clone git github.com/gogo/protobuf v0.3
 clone git github.com/cloudflare/cfssl 7fb22c8cba7ecaf98e4082d22d65800cf45e042a
