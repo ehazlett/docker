@@ -303,3 +303,13 @@ func (sr *swarmRouter) removeSecret(ctx context.Context, w http.ResponseWriter, 
 	}
 	return nil
 }
+
+func (sr *swarmRouter) getSecret(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	secret, err := sr.backend.GetSecret(vars["name"])
+	if err != nil {
+		logrus.Errorf("Error getting secret %s: %v", vars["name"], err)
+		return err
+	}
+
+	return httputils.WriteJSON(w, http.StatusOK, secret)
+}

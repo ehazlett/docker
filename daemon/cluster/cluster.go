@@ -266,10 +266,22 @@ func (c *Cluster) reconnectOnFailure(n *node) {
 	}
 }
 
-func (c *Cluster) GetSecret(name string) (*swarmapi.Secret, error) {
+func (c *Cluster) GetSecretFromNode(name string) (*swarmapi.Secret, error) {
 	return c.node.GetSecret(name)
 }
 
+func (c *Cluster) GetSecret(name string) (types.Secret, error) {
+	ctx, cancel := c.getRequestContext()
+	defer cancel()
+
+	client := swarmapi.NewSecretsClient(c.conn)
+	r, err := client.GetSecret(ctx, &swarmapi.GetSecretRequest{Name: name})
+	if err != nil {
+		return types.Secret{}, err
+	}
+
+	return convert.SecretFromGRPC(r.Secret), nil
+}
 func (c *Cluster) startNewNode(forceNewCluster bool, localAddr, remoteAddr, listenAddr, advertiseAddr, joinAddr, joinToken string) (*node, error) {
 	if err := c.config.Backend.IsSwarmCompatible(); err != nil {
 		return nil, err
