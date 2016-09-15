@@ -1,33 +1,42 @@
 package secret
 
 import (
-	"fmt"
+	"context"
 
 	"github.com/docker/docker/cli"
 	"github.com/docker/docker/cli/command"
+	"github.com/docker/docker/cli/command/inspect"
 	"github.com/spf13/cobra"
 )
 
-func newSecretInspectCommand(dockerCli *command.DockerCli) *cobra.Command {
-	return &cobra.Command{
-		Use:   "inspect [name]",
-		Short: "Inspect a secret",
-		Args:  cli.RequiresMinArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runSecretInspect(dockerCli)
-		},
-	}
+type inspectOptions struct {
+	name   string
+	format string
 }
 
-func runSecretInspect(dockerCli *command.DockerCli) error {
-	fmt.Fprintln(dockerCli.Out(), "TODO: secret inspect")
-	//client := dockerCli.Client()
-	//ctx := context.Background()
+func newSecretInspectCommand(dockerCli *command.DockerCli) *cobra.Command {
+	opts := inspectOptions{}
+	cmd := &cobra.Command{
+		Use:   "inspect [name]",
+		Short: "Inspect a secret",
+		Args:  cli.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.name = args[0]
+			return runSecretInspect(dockerCli, opts)
+		},
+	}
 
-	//if err := client.SwarmLeave(ctx, opts.force); err != nil {
-	//	return err
-	//}
+	cmd.Flags().StringVarP(&opts.format, "format", "f", "", "Format the output using the given go template")
+	return cmd
+}
 
-	//fmt.Fprintln(dockerCli.Out(), "Node left the swarm.")
-	return nil
+func runSecretInspect(dockerCli *command.DockerCli, opts inspectOptions) error {
+	client := dockerCli.Client()
+	ctx := context.Background()
+
+	getRef := func(name string) (interface{}, []byte, error) {
+		return client.SecretInspectWithRaw(ctx, name)
+	}
+
+	return inspect.Inspect(dockerCli.Out(), []string{opts.name}, opts.format, getRef)
 }

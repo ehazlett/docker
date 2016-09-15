@@ -31,7 +31,7 @@ func (s *SwarmSecretStore) Name() string {
 	return storeName
 }
 func (s *SwarmSecretStore) InspectSecret(id string) (*secret.Secret, error) {
-	sec, err := s.c.GetSecret(id)
+	sec, err := s.c.GetSecretFromNode(id)
 	if err != nil {
 		return nil, err
 	}
