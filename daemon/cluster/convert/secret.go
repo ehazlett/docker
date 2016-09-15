@@ -1,6 +1,8 @@
 package convert
 
 import (
+	"fmt"
+
 	types "github.com/docker/docker/api/types/swarm"
 	swarmapi "github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/protobuf/ptypes"
@@ -12,6 +14,7 @@ func SecretFromGRPC(s *swarmapi.Secret) types.Secret {
 		ID:            s.ID,
 		Name:          s.Name,
 		LatestVersion: s.LatestVersion,
+		SecretData:    map[string]*types.SecretData{},
 	}
 
 	// Meta
@@ -43,4 +46,26 @@ func SecretFromGRPC(s *swarmapi.Secret) types.Secret {
 	}
 
 	return secret
+}
+
+// SecretFromGRPC converts a grpc Service to a Service.
+func SecretSpecToGRPC(s types.SecretSpec) (swarmapi.SecretSpec, error) {
+	spec := swarmapi.SecretSpec{
+		Annotations: swarmapi.Annotations{
+			Name:   s.Name,
+			Labels: s.Labels,
+		},
+		Data: s.Data,
+	}
+
+	switch s.Type {
+	case types.ContainerSecret:
+		spec.Type = swarmapi.SecretType_ContainerSecret
+	case types.NodeSecret:
+		spec.Type = swarmapi.SecretType_NodeSecret
+	default:
+		return swarmapi.SecretSpec{}, fmt.Errorf("unknown secret type specified: %s", s.Type)
+	}
+
+	return spec, nil
 }

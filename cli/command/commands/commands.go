@@ -25,6 +25,7 @@ func AddCommands(cmd *cobra.Command, dockerCli *command.DockerCli) {
 	cmd.AddCommand(
 		node.NewNodeCommand(dockerCli),
 		service.NewServiceCommand(dockerCli),
+		secret.NewSecretCommand(dockerCli),
 		stack.NewStackCommand(dockerCli),
 		stack.NewTopLevelDeployCommand(dockerCli),
 		swarm.NewSwarmCommand(dockerCli),

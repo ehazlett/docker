@@ -259,3 +259,38 @@ func (sr *swarmRouter) getTask(ctx context.Context, w http.ResponseWriter, r *ht
 
 	return httputils.WriteJSON(w, http.StatusOK, task)
 }
+
+func (sr *swarmRouter) getSecrets(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	if err := httputils.ParseForm(r); err != nil {
+		return err
+	}
+	filter, err := filters.FromParam(r.Form.Get("filters"))
+	if err != nil {
+		return err
+	}
+
+	secrets, err := sr.backend.GetSecrets(basictypes.SecretListOptions{Filter: filter})
+	if err != nil {
+		logrus.Errorf("Error getting secrets: %v", err)
+		return err
+	}
+
+	return httputils.WriteJSON(w, http.StatusOK, secrets)
+}
+
+func (sr *swarmRouter) createSecret(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	var secret types.SecretSpec
+	if err := json.NewDecoder(r.Body).Decode(&secret); err != nil {
+		return err
+	}
+
+	name, err := sr.backend.CreateSecret(secret)
+	if err != nil {
+		logrus.Errorf("Error creating secret %s: %v", name, err)
+		return err
+	}
+
+	return httputils.WriteJSON(w, http.StatusCreated, &basictypes.SecretCreateResponse{
+		Name: name,
+	})
+}

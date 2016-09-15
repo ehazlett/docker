@@ -1586,3 +1586,62 @@ func initClusterSpec(node *node, spec types.Spec) error {
 	}
 	return ctx.Err()
 }
+
+// GetSecrets returns all secrets of a managed swarm cluster.
+func (c *Cluster) GetSecrets(options apitypes.SecretListOptions) ([]types.Secret, error) {
+	c.RLock()
+	defer c.RUnlock()
+
+	if !c.isActiveManager() {
+		return nil, c.errNoManager()
+	}
+
+	filters, err := newListSecretsFilters(options.Filter)
+	if err != nil {
+		return nil, err
+	}
+	ctx, cancel := c.getRequestContext()
+	defer cancel()
+
+	client := swarmapi.NewSecretsClient(c.conn)
+	r, err := client.ListSecrets(ctx,
+		&swarmapi.ListSecretsRequest{Filters: filters})
+	if err != nil {
+		return nil, err
+	}
+
+	secrets := []types.Secret{}
+
+	for _, secret := range r.Secrets {
+		secrets = append(secrets, convert.SecretFromGRPC(secret))
+	}
+
+	return secrets, nil
+}
+
+// CreateSecret creates a new secret in a managed swarm cluster.
+func (c *Cluster) CreateSecret(s types.SecretSpec) (string, error) {
+	c.RLock()
+	defer c.RUnlock()
+
+	if !c.isActiveManager() {
+		return "", c.errNoManager()
+	}
+
+	ctx, cancel := c.getRequestContext()
+	defer cancel()
+
+	secretSpec, err := convert.SecretSpecToGRPC(s)
+	if err != nil {
+		return "", err
+	}
+
+	client := swarmapi.NewSecretsClient(c.conn)
+	r, err := client.CreateSecret(ctx,
+		&swarmapi.CreateSecretRequest{Spec: &secretSpec})
+	if err != nil {
+		return "", err
+	}
+
+	return r.Secret.Name, nil
+}
