@@ -291,6 +291,11 @@ type ServiceListOptions struct {
 	Filter filters.Args
 }
 
+// SecretListOptions holds parameters to list  services with.
+type SecretListOptions struct {
+	Filter filters.Args
+}
+
 // TaskListOptions holds parameters to list  tasks with.
 type TaskListOptions struct {
 	Filter filters.Args
@@ -299,4 +304,11 @@ type TaskListOptions struct {
 // PluginRemoveOptions holds parameters to remove plugins.
 type PluginRemoveOptions struct {
 	Force bool
+}
+
+// SecretCreateResponse contains the information returned to a client
+// on the  creation of a new secret.
+type SecretCreateResponse struct {
+	// Name is the name of the created secret.
+	Name string
 }

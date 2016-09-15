@@ -24,6 +24,7 @@ type CommonAPIClient interface {
 	SwarmAPIClient
 	SystemAPIClient
 	VolumeAPIClient
+	SecretAPIClient
 	ClientVersion() string
 	ServerVersion(ctx context.Context) (types.Version, error)
 	UpdateClientVersion(v string)
@@ -108,6 +109,11 @@ type ServiceAPIClient interface {
 	ServiceUpdate(ctx context.Context, serviceID string, version swarm.Version, service swarm.ServiceSpec, options types.ServiceUpdateOptions) error
 	TaskInspectWithRaw(ctx context.Context, taskID string) (swarm.Task, []byte, error)
 	TaskList(ctx context.Context, options types.TaskListOptions) ([]swarm.Task, error)
+}
+
+type SecretAPIClient interface {
+	SecretList(ctx context.Context, options types.SecretListOptions) ([]swarm.Secret, error)
+	SecretCreate(ctx context.Context, secret swarm.SecretSpec) (types.SecretCreateResponse, error)
 }
 
 // SwarmAPIClient defines API client methods for the swarm
