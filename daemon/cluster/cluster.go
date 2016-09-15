@@ -129,6 +129,7 @@ type node struct {
 	ready          bool
 	conn           *grpc.ClientConn
 	client         swarmapi.ControlClient
+	secretsClient  swarmapi.SecretsClient
 	reconnectDelay time.Duration
 }
 
@@ -1644,4 +1645,30 @@ func (c *Cluster) CreateSecret(s types.SecretSpec) (string, error) {
 	}
 
 	return r.Secret.Name, nil
+}
+
+// RemoveSecret removes a secret from a managed swarm cluster.
+func (c *Cluster) RemoveSecret(name string, version string) error {
+	c.RLock()
+	defer c.RUnlock()
+
+	if !c.isActiveManager() {
+		return c.errNoManager()
+	}
+
+	ctx, cancel := c.getRequestContext()
+	defer cancel()
+
+	req := &swarmapi.RemoveSecretRequest{
+		Name: name,
+	}
+
+	if version != "" {
+		req.Version = version
+	}
+	client := swarmapi.NewSecretsClient(c.conn)
+	if _, err := client.RemoveSecret(ctx, req); err != nil {
+		return err
+	}
+	return nil
 }

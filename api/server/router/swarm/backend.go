@@ -25,4 +25,5 @@ type Backend interface {
 	GetTask(string) (types.Task, error)
 	GetSecrets(opts basictypes.SecretListOptions) ([]types.Secret, error)
 	CreateSecret(s types.SecretSpec) (string, error)
+	RemoveSecret(name string, version string) error
 }

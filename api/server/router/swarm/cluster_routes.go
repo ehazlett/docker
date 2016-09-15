@@ -294,3 +294,12 @@ func (sr *swarmRouter) createSecret(ctx context.Context, w http.ResponseWriter, 
 		Name: name,
 	})
 }
+
+func (sr *swarmRouter) removeSecret(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	version := r.URL.Query().Get("ver")
+	if err := sr.backend.RemoveSecret(vars["name"], version); err != nil {
+		logrus.Errorf("Error removing secret %s version %s: %v", vars["name"], vars["version"], err)
+		return err
+	}
+	return nil
+}

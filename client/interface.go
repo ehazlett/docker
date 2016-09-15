@@ -116,6 +116,7 @@ type ServiceAPIClient interface {
 type SecretAPIClient interface {
 	SecretList(ctx context.Context, options types.SecretListOptions) ([]swarm.Secret, error)
 	SecretCreate(ctx context.Context, secret swarm.SecretSpec) (types.SecretCreateResponse, error)
+	SecretRemove(ctx context.Context, name, version string) error
 }
 
 // SwarmAPIClient defines API client methods for the swarm
