@@ -1684,3 +1684,29 @@ func (c *Cluster) RemoveSecret(name string, version string) error {
 	}
 	return nil
 }
+
+// UpdateSecret updates a secret in a managed swarm cluster.
+func (c *Cluster) UpdateSecret(s types.SecretSpec) error {
+	c.RLock()
+	defer c.RUnlock()
+
+	if !c.isActiveManager() {
+		return c.errNoManager()
+	}
+
+	ctx, cancel := c.getRequestContext()
+	defer cancel()
+
+	secretSpec, err := convert.SecretSpecToGRPC(s)
+	if err != nil {
+		return err
+	}
+
+	client := swarmapi.NewSecretsClient(c.conn)
+	if _, err := client.UpdateSecret(ctx,
+		&swarmapi.UpdateSecretRequest{Spec: &secretSpec}); err != nil {
+		return err
+	}
+
+	return nil
+}
