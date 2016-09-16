@@ -313,3 +313,17 @@ func (sr *swarmRouter) getSecret(ctx context.Context, w http.ResponseWriter, r *
 
 	return httputils.WriteJSON(w, http.StatusOK, secret)
 }
+
+func (sr *swarmRouter) updateSecret(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	var secret types.SecretSpec
+	if err := json.NewDecoder(r.Body).Decode(&secret); err != nil {
+		return err
+	}
+
+	if err := sr.backend.UpdateSecret(secret); err != nil {
+		logrus.Errorf("Error updating secret %v", err)
+		return err
+	}
+
+	return nil
+}
