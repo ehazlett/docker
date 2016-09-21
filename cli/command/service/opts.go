@@ -413,6 +413,7 @@ type serviceOptions struct {
 	registryAuth bool
 
 	logDriver logDriverOptions
+	secrets   []string
 }
 
 func newServiceOptions() *serviceOptions {
@@ -427,8 +428,58 @@ func newServiceOptions() *serviceOptions {
 	}
 }
 
+func parseSecretString(secretString string) (secretName, versionID, presentName string, err error) {
+	tokens := strings.Split(secretString, ":")
+
+	secretTokens := strings.Split(tokens[0], "@")
+	secretName = strings.TrimSpace(secretTokens[0])
+	if len(secretTokens) > 1 {
+		versionID = strings.TrimSpace(secretTokens[1])
+		if versionID == "" {
+			err = fmt.Errorf("invalid secret version value provided")
+			return
+		}
+	}
+
+	if secretName == "" {
+		err = fmt.Errorf("invalid secret name provided")
+		return
+
+	}
+
+	if len(tokens) > 1 {
+		presentName = strings.TrimSpace(tokens[1])
+		if presentName == "" {
+			err = fmt.Errorf("invalid presentation name provided")
+			return
+		}
+
+	} else {
+		presentName = secretName
+	}
+	return
+}
+
 func (opts *serviceOptions) ToService() (swarm.ServiceSpec, error) {
 	var service swarm.ServiceSpec
+
+	secretRefs := []*swarm.SecretReference{}
+
+	for _, secret := range opts.secrets {
+		n, v, p, err := parseSecretString(secret)
+		if err != nil {
+			return service, err
+		}
+
+		secretRef := &swarm.SecretReference{
+			Name:         n,
+			SecretDataID: v,
+			Mode:         swarm.SecretReferenceFile,
+			Target:       p,
+		}
+
+		secretRefs = append(secretRefs, secretRef)
+	}
 
 	service = swarm.ServiceSpec{
 		Annotations: swarm.Annotations{
@@ -446,6 +497,7 @@ func (opts *serviceOptions) ToService() (swarm.ServiceSpec, error) {
 				Groups:          opts.groups,
 				Mounts:          opts.mounts.Value(),
 				StopGracePeriod: opts.stopGrace.Value(),
+				Secrets:         secretRefs,
 			},
 			Networks:      convertNetworks(opts.networks),
 			Resources:     opts.resources.ToResourceRequirements(),
@@ -515,6 +567,8 @@ func addServiceFlags(cmd *cobra.Command, opts *serviceOptions) {
 
 	flags.StringVar(&opts.logDriver.name, flagLogDriver, "", "Logging driver for service")
 	flags.Var(&opts.logDriver.opts, flagLogOpt, "Logging driver options")
+
+	flags.StringSliceVar(&opts.secrets, flagSecret, []string{}, "Specify secrets to expose to the service")
 }
 
 const (
@@ -560,4 +614,5 @@ const (
 	flagRegistryAuth         = "with-registry-auth"
 	flagLogDriver            = "log-driver"
 	flagLogOpt               = "log-opt"
+	flagSecret               = "secret"
 )

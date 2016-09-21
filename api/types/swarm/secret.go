@@ -29,3 +29,17 @@ type SecretSpec struct {
 	Type SecretType `json:",omitempty"`
 	Data []byte     `json",omitempty"`
 }
+
+type SecretReferenceMode int
+
+const (
+	SecretReferenceFile SecretReferenceMode = 0
+	SecretReferenceEnv  SecretReferenceMode = 1
+)
+
+type SecretReference struct {
+	Name         string              `json:",omitempty"`
+	SecretDataID string              `json:",omitempty"`
+	Mode         SecretReferenceMode `json:",omitempty"`
+	Target       string              `json:",omitempty"`
+}
