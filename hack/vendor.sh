@@ -67,7 +67,6 @@ clone git github.com/docker/go-units f2145db703495b2e525c59662db69a7344b00bb8
 clone git github.com/docker/go-connections 988efe982fdecb46f01d53465878ff1f2ff411ce
 
 clone git github.com/RackSec/srslog 365bf33cd9acc21ae1c355209865f17228ca534e
-clone git github.com/docker/engine-api 41f7f9568954c6c37bfbc2b4a2f33bbe17183f64 https://github.com/ehazlett/engine-api.git
 clone git github.com/imdario/mergo 0.2.1
 
 #get libnetwork packages
@@ -144,30 +143,7 @@ clone git github.com/docker/docker-credential-helpers v0.3.0
 clone git github.com/docker/containerd 2545227b0357eb55e369fa0072baef9ad91cdb69
 
 # cluster
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-<<<<<<< HEAD
-clone git github.com/docker/swarmkit 7b202f058db2f3a7d41351a56e5ef720c9b5a45d
-=======
-<<<<<<< HEAD
-clone git github.com/docker/swarmkit 27fbaef4ceed648bb575969ccc9083a6e104a719
-=======
-#clone git github.com/docker/swarmkit 8a761950fb4d9251c335dc6149a8a02756cb3b10
-#clone git github.com/docker/swarmkit 75df232b6bb7c0b79f5793eb6f7193dc67951ae3 https://github.com/diogomonica/swarmkit
-clone git github.com/docker/swarmkit ce1849f9fe0ef346ef1eb45522944023beae2750 https://github.com/ehazlett/swarmkit
->>>>>>> 6545047... secrets: integration with swarmkit
->>>>>>> 68673ee... secrets: integration with swarmkit
-=======
-#clone git github.com/docker/swarmkit 8a761950fb4d9251c335dc6149a8a02756cb3b10
-#clone git github.com/docker/swarmkit 75df232b6bb7c0b79f5793eb6f7193dc67951ae3 https://github.com/diogomonica/swarmkit
-=======
->>>>>>> 40d3b9e... secrets: refactor for engine-api -> docker/api
-clone git github.com/docker/swarmkit ce1849f9fe0ef346ef1eb45522944023beae2750 https://github.com/ehazlett/swarmkit
->>>>>>> f99fc4e... secrets: remove secret cli commands; update vendor
-=======
 clone git github.com/docker/swarmkit a690d51c2c16947b0f1d5929c6b4440af309ccb8 https://github.com/ehazlett/swarmkit
->>>>>>> 8bb9216... secrets: update swarmkit in vendor.sh
 clone git github.com/golang/mock bd3c8e81be01eef76d4b503f5e687d2d1354d2d9
 clone git github.com/gogo/protobuf v0.3
 clone git github.com/cloudflare/cfssl 7fb22c8cba7ecaf98e4082d22d65800cf45e042a
