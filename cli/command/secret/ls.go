@@ -53,7 +53,7 @@ func runSecretList(dockerCli *command.DockerCli, opts listOptions) error {
 
 	// TODO (ejh): pretty timestamps
 	for _, s := range secrets {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%v\n", s.Name, s.Meta.CreatedAt, s.Meta.UpdatedAt, len(s.SecretData))
+		fmt.Fprintf(w, "%s\t%s\t%s\t%v\n", s.Spec.Annotations.Name, s.Meta.CreatedAt, s.Meta.UpdatedAt, s.SecretSize)
 	}
 	w.Flush()
 

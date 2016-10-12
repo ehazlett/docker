@@ -22,7 +22,6 @@ import (
 	"github.com/docker/docker/daemon/cluster/convert"
 	executorpkg "github.com/docker/docker/daemon/cluster/executor"
 	"github.com/docker/docker/daemon/cluster/executor/container"
-	"github.com/docker/docker/errors"
 	"github.com/docker/docker/opts"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/signal"
@@ -129,7 +128,6 @@ type node struct {
 	ready          bool
 	conn           *grpc.ClientConn
 	client         swarmapi.ControlClient
-	secretsClient  swarmapi.SecretsClient
 	reconnectDelay time.Duration
 }
 
@@ -247,15 +245,15 @@ func (c *Cluster) reconnectOnFailure(n *node) {
 }
 
 func (c *Cluster) GetSecretFromNode(name string) (*swarmapi.Secret, error) {
-	return c.node.GetSecret(name)
+	// TODO: remove?
+	return nil, nil
 }
 
-func (c *Cluster) GetSecret(name string) (types.Secret, error) {
+func (c *Cluster) GetSecret(id string) (types.Secret, error) {
 	ctx, cancel := c.getRequestContext()
 	defer cancel()
 
-	client := swarmapi.NewSecretsClient(c.conn)
-	r, err := client.GetSecret(ctx, &swarmapi.GetSecretRequest{Name: name})
+	r, err := c.node.client.GetSecret(ctx, &swarmapi.GetSecretRequest{SecretID: id})
 	if err != nil {
 		return types.Secret{}, err
 	}
@@ -1616,8 +1614,7 @@ func (c *Cluster) GetSecrets(options apitypes.SecretListOptions) ([]types.Secret
 	ctx, cancel := c.getRequestContext()
 	defer cancel()
 
-	client := swarmapi.NewSecretsClient(c.conn)
-	r, err := client.ListSecrets(ctx,
+	r, err := c.node.client.ListSecrets(ctx,
 		&swarmapi.ListSecretsRequest{Filters: filters})
 	if err != nil {
 		return nil, err
@@ -1649,18 +1646,17 @@ func (c *Cluster) CreateSecret(s types.SecretSpec) (string, error) {
 		return "", err
 	}
 
-	client := swarmapi.NewSecretsClient(c.conn)
-	r, err := client.CreateSecret(ctx,
+	r, err := c.node.client.CreateSecret(ctx,
 		&swarmapi.CreateSecretRequest{Spec: &secretSpec})
 	if err != nil {
 		return "", err
 	}
 
-	return r.Secret.Name, nil
+	return r.Secret.ID, nil
 }
 
 // RemoveSecret removes a secret from a managed swarm cluster.
-func (c *Cluster) RemoveSecret(name string, version string) error {
+func (c *Cluster) RemoveSecret(id string, version string) error {
 	c.RLock()
 	defer c.RUnlock()
 
@@ -1672,14 +1668,10 @@ func (c *Cluster) RemoveSecret(name string, version string) error {
 	defer cancel()
 
 	req := &swarmapi.RemoveSecretRequest{
-		Name: name,
+		SecretID: id,
 	}
 
-	if version != "" {
-		req.Version = version
-	}
-	client := swarmapi.NewSecretsClient(c.conn)
-	if _, err := client.RemoveSecret(ctx, req); err != nil {
+	if _, err := c.node.client.RemoveSecret(ctx, req); err != nil {
 		return err
 	}
 	return nil
@@ -1687,26 +1679,25 @@ func (c *Cluster) RemoveSecret(name string, version string) error {
 
 // UpdateSecret updates a secret in a managed swarm cluster.
 func (c *Cluster) UpdateSecret(s types.SecretSpec) error {
-	c.RLock()
-	defer c.RUnlock()
+	//c.RLock()
+	//defer c.RUnlock()
 
-	if !c.isActiveManager() {
-		return c.errNoManager()
-	}
+	//if !c.isActiveManager() {
+	//	return c.errNoManager()
+	//}
 
-	ctx, cancel := c.getRequestContext()
-	defer cancel()
+	//ctx, cancel := c.getRequestContext()
+	//defer cancel()
 
-	secretSpec, err := convert.SecretSpecToGRPC(s)
-	if err != nil {
-		return err
-	}
+	//secretSpec, err := convert.SecretSpecToGRPC(s)
+	//if err != nil {
+	//	return err
+	//}
 
-	client := swarmapi.NewSecretsClient(c.conn)
-	if _, err := client.UpdateSecret(ctx,
-		&swarmapi.UpdateSecretRequest{Spec: &secretSpec}); err != nil {
-		return err
-	}
+	//if _, err := c.node.client.UpdateSecret(ctx,
+	//	&swarmapi.UpdateSecretRequest{Spec: &secretSpec}); err != nil {
+	//	return err
+	//}
 
 	return nil
 }

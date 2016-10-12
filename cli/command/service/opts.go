@@ -472,10 +472,10 @@ func (opts *serviceOptions) ToService() (swarm.ServiceSpec, error) {
 		}
 
 		secretRef := &swarm.SecretReference{
-			Name:         n,
-			SecretDataID: v,
-			Mode:         swarm.SecretReferenceFile,
-			Target:       p,
+			SecretName: n,
+			SecretID:   v,
+			Mode:       swarm.SecretReferenceFile,
+			Target:     p,
 		}
 
 		secretRefs = append(secretRefs, secretRef)

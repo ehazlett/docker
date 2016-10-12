@@ -43,7 +43,6 @@ func runSecretUpdate(dockerCli *command.DockerCli, opts updateOptions) error {
 		Annotations: swarm.Annotations{
 			Name: opts.name,
 		},
-		Type: swarm.ContainerSecret,
 		Data: secretData,
 	}
 

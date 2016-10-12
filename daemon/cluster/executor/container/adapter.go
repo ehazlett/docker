@@ -199,10 +199,10 @@ func (c *containerAdapter) create(ctx context.Context) error {
 		config.Secrets = []secret.Secret{}
 	}
 	for _, s := range c.container.spec().Secrets {
-		logrus.Debugf("secrets: updating container config with secret %s", s.Name)
+		logrus.Debugf("secrets: updating container config with secret %s", s.SecretName)
 		sec := secret.Secret{
-			ID:         s.Name,
-			Name:       s.Name,
+			ID:         s.SecretName,
+			Name:       s.SecretName,
 			Mountpoint: s.Target,
 		}
 		switch s.Mode {

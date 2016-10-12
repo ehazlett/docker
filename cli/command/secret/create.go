@@ -44,7 +44,6 @@ func runSecretCreate(dockerCli *command.DockerCli, opts createOptions) error {
 		Annotations: swarm.Annotations{
 			Name: opts.name,
 		},
-		Type: swarm.ContainerSecret,
 		Data: secretData,
 	}
 
