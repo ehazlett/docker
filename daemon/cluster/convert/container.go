@@ -71,6 +71,31 @@ func containerToGRPC(c types.ContainerSpec) (*swarmapi.ContainerSpec, error) {
 		Groups:  c.Groups,
 	}
 
+	if len(c.Secrets) > 0 {
+		secretRefs := []*swarmapi.SecretReference{}
+
+		for _, s := range c.Secrets {
+			r := &swarmapi.SecretReference{
+				SecretID:   s.SecretID,
+				Target:     s.Target,
+				SecretName: s.SecretName,
+			}
+
+			switch s.Mode {
+			case types.SecretReferenceSystem:
+				r.Mode = swarmapi.SecretReference_SYSTEM
+			case types.SecretReferenceEnv:
+				r.Mode = swarmapi.SecretReference_ENV
+			default:
+				r.Mode = swarmapi.SecretReference_FILE
+			}
+
+			secretRefs = append(secretRefs, r)
+		}
+
+		containerSpec.Secrets = secretRefs
+	}
+
 	if c.StopGracePeriod != nil {
 		containerSpec.StopGracePeriod = ptypes.DurationProto(*c.StopGracePeriod)
 	}

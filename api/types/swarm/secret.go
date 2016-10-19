@@ -6,7 +6,7 @@ type Secret struct {
 	Meta
 	Spec       *SecretSpec `json:",omitempty"`
 	Digest     string      `json:",omitempty"`
-	SecretSize int32       `json:",omitempty"`
+	SecretSize int64       `json:",omitempty"`
 }
 
 type SecretSpec struct {
@@ -17,14 +17,14 @@ type SecretSpec struct {
 type SecretReferenceMode int
 
 const (
-	SecretReferenceFile SecretReferenceMode = 0
-	SecretReferenceEnv  SecretReferenceMode = 1
+	SecretReferenceSystem SecretReferenceMode = 0
+	SecretReferenceFile   SecretReferenceMode = 1
+	SecretReferenceEnv    SecretReferenceMode = 2
 )
 
 type SecretReference struct {
 	SecretID   string              `json:",omitempty"`
 	Mode       SecretReferenceMode `json:",omitempty"`
-	Name       string              `json:",omitempty"`
 	Target     string              `json:",omitempty"`
 	SecretName string              `json:",omitempty"`
 }

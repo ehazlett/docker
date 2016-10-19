@@ -48,12 +48,12 @@ func runSecretList(dockerCli *command.DockerCli, opts listOptions) error {
 
 	// TODO (ejh): quiet
 	w := tabwriter.NewWriter(dockerCli.Out(), 20, 1, 3, ' ', 0)
-	fmt.Fprintf(w, "NAME\tCREATED\tUPDATED\tVERSIONS")
+	fmt.Fprintf(w, "ID\t NAME\t CREATED\t UPDATED\t SIZE")
 	fmt.Fprintf(w, "\n")
 
 	// TODO (ejh): pretty timestamps
 	for _, s := range secrets {
-		fmt.Fprintf(w, "%s\t%s\t%s\t%v\n", s.Spec.Annotations.Name, s.Meta.CreatedAt, s.Meta.UpdatedAt, s.SecretSize)
+		fmt.Fprintf(w, "%s\t%s\t%s\t%s\t%d\n", s.ID, s.Spec.Annotations.Name, s.Meta.CreatedAt, s.Meta.UpdatedAt, s.SecretSize)
 	}
 	w.Flush()
 

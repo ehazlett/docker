@@ -463,24 +463,6 @@ func parseSecretString(secretString string) (secretName, versionID, presentName 
 func (opts *serviceOptions) ToService() (swarm.ServiceSpec, error) {
 	var service swarm.ServiceSpec
 
-	secretRefs := []*swarm.SecretReference{}
-
-	for _, secret := range opts.secrets {
-		n, v, p, err := parseSecretString(secret)
-		if err != nil {
-			return service, err
-		}
-
-		secretRef := &swarm.SecretReference{
-			SecretName: n,
-			SecretID:   v,
-			Mode:       swarm.SecretReferenceFile,
-			Target:     p,
-		}
-
-		secretRefs = append(secretRefs, secretRef)
-	}
-
 	service = swarm.ServiceSpec{
 		Annotations: swarm.Annotations{
 			Name:   opts.name,
@@ -497,7 +479,6 @@ func (opts *serviceOptions) ToService() (swarm.ServiceSpec, error) {
 				Groups:          opts.groups,
 				Mounts:          opts.mounts.Value(),
 				StopGracePeriod: opts.stopGrace.Value(),
-				Secrets:         secretRefs,
 			},
 			Networks:      convertNetworks(opts.networks),
 			Resources:     opts.resources.ToResourceRequirements(),

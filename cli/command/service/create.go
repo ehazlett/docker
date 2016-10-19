@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/cli"
 	"github.com/docker/docker/cli/command"
 	"github.com/spf13/cobra"
@@ -43,6 +44,7 @@ func newCreateCommand(dockerCli *command.DockerCli) *cobra.Command {
 
 func runCreate(dockerCli *command.DockerCli, opts *serviceOptions) error {
 	apiClient := dockerCli.Client()
+	ctx := context.Background()
 	createOpts := types.ServiceCreateOptions{}
 
 	service, err := opts.ToService()
@@ -50,7 +52,40 @@ func runCreate(dockerCli *command.DockerCli, opts *serviceOptions) error {
 		return err
 	}
 
-	ctx := context.Background()
+	// TODO: add secrets
+	if len(opts.secrets) > 0 {
+		secretRefs := []*swarm.SecretReference{}
+
+		// TODO: filter
+		lookupSecrets, err := apiClient.SecretList(ctx, types.SecretListOptions{})
+		if err != nil {
+			return err
+		}
+
+		foundSecrets := make(map[string]swarm.Secret)
+		for _, s := range lookupSecrets {
+			foundSecrets[s.Spec.Annotations.Name] = s
+		}
+
+		for _, s := range opts.secrets {
+			r, ok := foundSecrets[s]
+			if !ok {
+				return fmt.Errorf("secret not found: %s", s)
+			}
+
+			secretRefs = append(secretRefs, &swarm.SecretReference{
+				SecretID:   r.ID,
+				SecretName: r.Spec.Annotations.Name,
+				Mode:       swarm.SecretReferenceFile,
+				// TODO: how do we get this from the secret?
+				Target: r.Spec.Annotations.Name,
+			})
+		}
+
+		service.TaskTemplate.ContainerSpec.Secrets = secretRefs
+	}
+
+	fmt.Printf("%+v\n", service.TaskTemplate.ContainerSpec.Secrets)
 
 	// only send auth if flag was set
 	if opts.registryAuth {
