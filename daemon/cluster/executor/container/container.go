@@ -348,6 +348,18 @@ func (c *containerConfig) hostConfig() *enginecontainer.HostConfig {
 		hc.DNSOptions = c.spec().DNSConfig.Options
 	}
 
+	if s := c.spec().SecurityProfiles; s != nil {
+		if s.Linux != nil {
+			for _, c := range s.Linux.Capabilities {
+				// why do we make it NET_RAW instead of CAP_NET_RAW :(
+				cap := strings.Replace(c.String(), "CAP_", "", 1)
+				hc.CapAdd = append(hc.CapAdd, cap)
+			}
+		}
+
+		// TODO (ehazlett) windows
+	}
+
 	// The format of extra hosts on swarmkit is specified in:
 	// http://man7.org/linux/man-pages/man5/hosts.5.html
 	//    IP_address canonical_hostname [aliases...]

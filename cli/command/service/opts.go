@@ -293,24 +293,26 @@ type serviceOptions struct {
 
 	logDriver logDriverOptions
 
-	healthcheck healthCheckOptions
-	secrets     opts.SecretOpt
+	healthcheck      healthCheckOptions
+	secrets          opts.SecretOpt
+	privilegeOptions opts.ListOpts
 }
 
 func newServiceOptions() *serviceOptions {
 	return &serviceOptions{
-		labels:          opts.NewListOpts(opts.ValidateEnv),
-		constraints:     opts.NewListOpts(nil),
-		containerLabels: opts.NewListOpts(opts.ValidateEnv),
-		env:             opts.NewListOpts(opts.ValidateEnv),
-		envFile:         opts.NewListOpts(nil),
-		groups:          opts.NewListOpts(nil),
-		logDriver:       newLogDriverOptions(),
-		dns:             opts.NewListOpts(opts.ValidateIPAddress),
-		dnsOption:       opts.NewListOpts(nil),
-		dnsSearch:       opts.NewListOpts(opts.ValidateDNSSearch),
-		hosts:           opts.NewListOpts(opts.ValidateExtraHost),
-		networks:        opts.NewListOpts(nil),
+		labels:           opts.NewListOpts(opts.ValidateEnv),
+		constraints:      opts.NewListOpts(nil),
+		containerLabels:  opts.NewListOpts(opts.ValidateEnv),
+		env:              opts.NewListOpts(opts.ValidateEnv),
+		envFile:          opts.NewListOpts(nil),
+		groups:           opts.NewListOpts(nil),
+		logDriver:        newLogDriverOptions(),
+		dns:              opts.NewListOpts(opts.ValidateIPAddress),
+		dnsOption:        opts.NewListOpts(nil),
+		dnsSearch:        opts.NewListOpts(opts.ValidateDNSSearch),
+		hosts:            opts.NewListOpts(opts.ValidateExtraHost),
+		networks:         opts.NewListOpts(nil),
+		privilegeOptions: opts.NewListOpts(nil),
 	}
 }
 
@@ -365,6 +367,12 @@ func (opts *serviceOptions) ToService() (swarm.ServiceSpec, error) {
 		return service, err
 	}
 
+	privilegeOptions := runconfigopts.ConvertKVStringsToMap(opts.privilegeOptions.GetAll())
+	securityProfiles, err := parsePrivilegeOptions(privilegeOptions)
+	if err != nil {
+		return service, err
+	}
+
 	service = swarm.ServiceSpec{
 		Annotations: swarm.Annotations{
 			Name:   opts.name,
@@ -388,10 +396,11 @@ func (opts *serviceOptions) ToService() (swarm.ServiceSpec, error) {
 					Search:      opts.dnsSearch.GetAll(),
 					Options:     opts.dnsOption.GetAll(),
 				},
-				Hosts:           convertExtraHostsToSwarmHosts(opts.hosts.GetAll()),
-				StopGracePeriod: opts.stopGrace.Value(),
-				Secrets:         nil,
-				Healthcheck:     healthConfig,
+				Hosts:            convertExtraHostsToSwarmHosts(opts.hosts.GetAll()),
+				StopGracePeriod:  opts.stopGrace.Value(),
+				Secrets:          nil,
+				Healthcheck:      healthConfig,
+				SecurityProfiles: securityProfiles,
 			},
 			Networks:      convertNetworks(opts.networks.GetAll()),
 			Resources:     opts.resources.ToResourceRequirements(),
@@ -542,4 +551,5 @@ const (
 	flagSecret                = "secret"
 	flagSecretAdd             = "secret-add"
 	flagSecretRemove          = "secret-rm"
+	flagPrivilegeOption       = "privilege-opt"
 )

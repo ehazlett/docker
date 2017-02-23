@@ -84,6 +84,47 @@ func containerSpecFromGRPC(c *swarmapi.ContainerSpec) types.ContainerSpec {
 		containerSpec.Healthcheck = healthConfigFromGRPC(c.Healthcheck)
 	}
 
+	profiles := &types.PrivilegeProfiles{
+		Windows: &types.WindowsRawPrivilegeProfile{},
+		Linux:   &types.LinuxRawPrivilegeProfile{},
+	}
+
+	// linux profile
+	if c.SecurityProfiles != nil && c.SecurityProfiles.Linux != nil {
+		p := c.SecurityProfiles.Linux
+		var ver types.PrivilegeProfileVersion
+		switch p.Version {
+		case swarmapi.LinuxRawPrivilegeProfile_V0:
+			ver = types.PrivilegeProfileVersionLinuxV0
+
+		}
+		lp := &types.LinuxRawPrivilegeProfile{
+			Version:    ver,
+			AllDevices: p.AllDevices,
+		}
+
+		devices := []*types.Device{}
+		for _, d := range p.Devices {
+			devices = append(devices, &types.Device{
+				Path: d.Path,
+				Rwm:  d.Rwm,
+			})
+		}
+		lp.Devices = devices
+		pCaps := []string{}
+		for _, c := range p.Capabilities {
+			pCaps = append(pCaps, c.String())
+		}
+		lp.Capabilities = pCaps
+
+		profiles.Linux = lp
+		logrus.Debugf("LINUX PROFILE: %+v", lp)
+	}
+
+	// TODO (ehazlett): windows privilege profile
+
+	containerSpec.SecurityProfiles = profiles
+
 	return containerSpec
 }
 
@@ -212,6 +253,38 @@ func containerToGRPC(c types.ContainerSpec) (*swarmapi.ContainerSpec, error) {
 	if c.Healthcheck != nil {
 		containerSpec.Healthcheck = healthConfigToGRPC(c.Healthcheck)
 	}
+
+	profiles := &swarmapi.PrivilegeProfiles{
+		Windows: &swarmapi.WindowsRawPrivilegeProfile{},
+		Linux:   &swarmapi.LinuxRawPrivilegeProfile{},
+	}
+	if p := c.SecurityProfiles.Linux; p != nil {
+		lp := &swarmapi.LinuxRawPrivilegeProfile{
+			AllDevices: p.AllDevices,
+		}
+		switch p.Version {
+		case types.PrivilegeProfileVersionLinuxV0:
+			lp.Version = swarmapi.LinuxRawPrivilegeProfile_V0
+		}
+
+		devices := []*swarmapi.LinuxRawPrivilegeProfile_Device{}
+		for _, d := range p.Devices {
+			devices = append(devices, &swarmapi.LinuxRawPrivilegeProfile_Device{
+				Path: d.Path,
+				Rwm:  d.Rwm,
+			})
+		}
+		pCaps, err := getSwarmCapabilities(p.Capabilities)
+		if err != nil {
+			return nil, err
+		}
+		lp.Capabilities = pCaps
+
+		profiles.Linux = lp
+	}
+	// TODO (ehazlett): windows privilege profile
+
+	containerSpec.SecurityProfiles = profiles
 
 	return containerSpec, nil
 }
