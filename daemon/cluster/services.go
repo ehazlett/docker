@@ -51,7 +51,11 @@ func (c *Cluster) GetServices(options apitypes.ServiceListOptions) ([]types.Serv
 	services := []types.Service{}
 
 	for _, service := range r.Services {
-		services = append(services, convert.ServiceFromGRPC(*service))
+		svcs, err := convert.ServiceFromGRPC(*service)
+		if err != nil {
+			return nil, err
+		}
+		services = append(services, svcs)
 	}
 
 	return services, nil
@@ -74,7 +78,11 @@ func (c *Cluster) GetService(input string) (types.Service, error) {
 	if err != nil {
 		return types.Service{}, err
 	}
-	return convert.ServiceFromGRPC(*service), nil
+	svcs, err := convert.ServiceFromGRPC(*service)
+	if err != nil {
+		return types.Service{}, err
+	}
+	return svcs, nil
 }
 
 // CreateService creates a new service in a managed swarm cluster.
@@ -100,37 +108,44 @@ func (c *Cluster) CreateService(s types.ServiceSpec, encodedAuth string) (*apity
 		return nil, apierrors.NewBadRequestError(err)
 	}
 
-	ctnr := serviceSpec.Task.GetContainer()
-	if ctnr == nil {
-		return nil, errors.New("service does not use container tasks")
-	}
-
-	if encodedAuth != "" {
-		ctnr.PullOptions = &swarmapi.ContainerSpec_PullOptions{RegistryAuth: encodedAuth}
-	}
-
-	// retrieve auth config from encoded auth
-	authConfig := &apitypes.AuthConfig{}
-	if encodedAuth != "" {
-		if err := json.NewDecoder(base64.NewDecoder(base64.URLEncoding, strings.NewReader(encodedAuth))).Decode(authConfig); err != nil {
-			logrus.Warnf("invalid authconfig: %v", err)
-		}
-	}
-
 	resp := &apitypes.ServiceCreateResponse{}
 
-	// pin image by digest
-	if os.Getenv("DOCKER_SERVICE_PREFER_OFFLINE_IMAGE") != "1" {
-		digestImage, err := c.imageWithDigestString(ctx, ctnr.Image, authConfig)
-		if err != nil {
-			logrus.Warnf("unable to pin image %s to digest: %s", ctnr.Image, err.Error())
-			resp.Warnings = append(resp.Warnings, fmt.Sprintf("unable to pin image %s to digest: %s", ctnr.Image, err.Error()))
-		} else if ctnr.Image != digestImage {
-			logrus.Debugf("pinning image %s by digest: %s", ctnr.Image, digestImage)
-			ctnr.Image = digestImage
-		} else {
-			logrus.Debugf("creating service using supplied digest reference %s", ctnr.Image)
+	switch t := serviceSpec.Task.Runtime.(type) {
+	case *swarmapi.TaskSpec_Custom:
+		// TODO: inject container spec from t.Custom.Value
+	case *swarmapi.TaskSpec_Container:
+		ctnr := serviceSpec.Task.GetContainer()
+		if ctnr == nil {
+			return nil, errors.New("service does not use container tasks")
 		}
+
+		if encodedAuth != "" {
+			ctnr.PullOptions = &swarmapi.ContainerSpec_PullOptions{RegistryAuth: encodedAuth}
+		}
+
+		// retrieve auth config from encoded auth
+		authConfig := &apitypes.AuthConfig{}
+		if encodedAuth != "" {
+			if err := json.NewDecoder(base64.NewDecoder(base64.URLEncoding, strings.NewReader(encodedAuth))).Decode(authConfig); err != nil {
+				logrus.Warnf("invalid authconfig: %v", err)
+			}
+		}
+
+		// pin image by digest
+		if os.Getenv("DOCKER_SERVICE_PREFER_OFFLINE_IMAGE") != "1" {
+			digestImage, err := c.imageWithDigestString(ctx, ctnr.Image, authConfig)
+			if err != nil {
+				logrus.Warnf("unable to pin image %s to digest: %s", ctnr.Image, err.Error())
+				resp.Warnings = append(resp.Warnings, fmt.Sprintf("unable to pin image %s to digest: %s", ctnr.Image, err.Error()))
+			} else if ctnr.Image != digestImage {
+				logrus.Debugf("pinning image %s by digest: %s", ctnr.Image, digestImage)
+				ctnr.Image = digestImage
+			} else {
+				logrus.Debugf("creating service using supplied digest reference %s", ctnr.Image)
+			}
+		}
+	default:
+		return nil, fmt.Errorf("error creating service: unsupported runtime %s", t)
 	}
 
 	r, err := state.controlClient.CreateService(ctx, &swarmapi.CreateServiceRequest{Spec: &serviceSpec})

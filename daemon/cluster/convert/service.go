@@ -1,9 +1,11 @@
 package convert
 
 import (
+	"encoding/json"
 	"fmt"
 	"strings"
 
+	"github.com/Sirupsen/logrus"
 	types "github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/pkg/namesgenerator"
 	swarmapi "github.com/docker/swarmkit/api"
@@ -11,11 +13,19 @@ import (
 )
 
 // ServiceFromGRPC converts a grpc Service to a Service.
-func ServiceFromGRPC(s swarmapi.Service) types.Service {
+func ServiceFromGRPC(s swarmapi.Service) (types.Service, error) {
+	curSpec, err := serviceSpecFromGRPC(&s.Spec)
+	if err != nil {
+		return types.Service{}, err
+	}
+	prevSpec, err := serviceSpecFromGRPC(s.PreviousSpec)
+	if err != nil {
+		return types.Service{}, err
+	}
 	service := types.Service{
 		ID:           s.ID,
-		Spec:         *serviceSpecFromGRPC(&s.Spec),
-		PreviousSpec: serviceSpecFromGRPC(s.PreviousSpec),
+		Spec:         *curSpec,
+		PreviousSpec: prevSpec,
 
 		Endpoint: endpointFromGRPC(s.Endpoint),
 	}
@@ -50,12 +60,12 @@ func ServiceFromGRPC(s swarmapi.Service) types.Service {
 		service.UpdateStatus.Message = s.UpdateStatus.Message
 	}
 
-	return service
+	return service, nil
 }
 
-func serviceSpecFromGRPC(spec *swarmapi.ServiceSpec) *types.ServiceSpec {
+func serviceSpecFromGRPC(spec *swarmapi.ServiceSpec) (*types.ServiceSpec, error) {
 	if spec == nil {
-		return nil
+		return nil, nil
 	}
 
 	serviceNetworks := make([]types.NetworkAttachmentConfig, 0, len(spec.Networks))
@@ -68,11 +78,9 @@ func serviceSpecFromGRPC(spec *swarmapi.ServiceSpec) *types.ServiceSpec {
 		taskNetworks = append(taskNetworks, types.NetworkAttachmentConfig{Target: n.Target, Aliases: n.Aliases})
 	}
 
-	containerConfig := spec.Task.Runtime.(*swarmapi.TaskSpec_Container).Container
 	convertedSpec := &types.ServiceSpec{
 		Annotations: annotationsFromGRPC(spec.Annotations),
 		TaskTemplate: types.TaskSpec{
-			ContainerSpec: containerSpecFromGRPC(containerConfig),
 			Resources:     resourcesFromGRPC(spec.Task.Resources),
 			RestartPolicy: restartPolicyFromGRPC(spec.Task.Restart),
 			Placement:     placementFromGRPC(spec.Task.Placement),
@@ -83,6 +91,18 @@ func serviceSpecFromGRPC(spec *swarmapi.ServiceSpec) *types.ServiceSpec {
 
 		Networks:     serviceNetworks,
 		EndpointSpec: endpointSpecFromGRPC(spec.Endpoint),
+	}
+
+	switch t := spec.Task.Runtime.(type) {
+	case *swarmapi.TaskSpec_Custom:
+		runtime := spec.Task.Runtime.(*swarmapi.TaskSpec_Custom)
+		logrus.Debugf("RUNTIME: %s", runtime.Custom.TypeUrl)
+		logrus.Debugf("RUNTIME Data: %s", string(runtime.Custom.Value))
+	case *swarmapi.TaskSpec_Container:
+		containerConfig := spec.Task.Runtime.(*swarmapi.TaskSpec_Container).Container
+		convertedSpec.TaskTemplate.ContainerSpec = containerSpecFromGRPC(containerConfig)
+	default:
+		return nil, fmt.Errorf("unsupported runtime: %+v", t)
 	}
 
 	// UpdateConfig
@@ -115,7 +135,7 @@ func serviceSpecFromGRPC(spec *swarmapi.ServiceSpec) *types.ServiceSpec {
 		}
 	}
 
-	return convertedSpec
+	return convertedSpec, nil
 }
 
 // ServiceSpecToGRPC converts a ServiceSpec to a grpc ServiceSpec.
@@ -149,11 +169,33 @@ func ServiceSpecToGRPC(s types.ServiceSpec) (swarmapi.ServiceSpec, error) {
 		Networks: serviceNetworks,
 	}
 
-	containerSpec, err := containerToGRPC(s.TaskTemplate.ContainerSpec)
-	if err != nil {
-		return swarmapi.ServiceSpec{}, err
+	switch s.TaskTemplate.Runtime {
+	case types.RuntimeHello:
+		spec := &swarmapi.ContainerSpec{
+			Image:     "alpine:latest",
+			Command:   "/bin/ash",
+			Args:      []string{"echo", "hello", "runtime", "hello"},
+			TTY:       true,
+			OpenStdin: true,
+			ReadOnly:  true,
+		}
+		data, err := json.Marshal(spec)
+		if err != nil {
+			return swarmapi.ServiceSpec{}, err
+		}
+		spec.Task.Runtime = &swarmapi.TaskSpec_Custom{
+			Custom: &gogotypes.Any{
+				TypeUrl: string(types.RuntimeHello),
+				Value:   data,
+			},
+		}
+	default: // default to container
+		containerSpec, err := containerToGRPC(s.TaskTemplate.ContainerSpec)
+		if err != nil {
+			return swarmapi.ServiceSpec{}, err
+		}
+		spec.Task.Runtime = &swarmapi.TaskSpec_Container{Container: containerSpec}
 	}
-	spec.Task.Runtime = &swarmapi.TaskSpec_Container{Container: containerSpec}
 
 	restartPolicy, err := restartPolicyToGRPC(s.TaskTemplate.RestartPolicy)
 	if err != nil {
