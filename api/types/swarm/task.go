@@ -34,13 +34,6 @@ const (
 	TaskStateRejected TaskState = "rejected"
 )
 
-type RuntimeType string
-
-const (
-	RuntimeDefault RuntimeType = "com.docker.runtime.default"
-	RuntimeHello   RuntimeType = "com.docker.runtime.hello"
-)
-
 // Task represents a task.
 type Task struct {
 	ID string
