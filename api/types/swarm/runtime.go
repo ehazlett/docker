@@ -3,5 +3,6 @@ package swarm
 type RuntimeType string
 
 const (
-	RuntimePlugin RuntimeType = "com.docker.runtime.plugin"
+	RuntimeContainer RuntimeType = "com.docker.runtime.container"
+	RuntimePlugin    RuntimeType = "com.docker.runtime.plugin"
 )

@@ -91,8 +91,25 @@ func serviceSpecFromGRPC(spec *swarmapi.ServiceSpec) (*types.ServiceSpec, error)
 		EndpointSpec: endpointSpecFromGRPC(spec.Endpoint),
 	}
 
-	containerConfig := spec.Task.Runtime.(*swarmapi.TaskSpec_Container).Container
-	convertedSpec.TaskTemplate.ContainerSpec = containerSpecFromGRPC(containerConfig)
+	// TODO: convert from runtime
+	switch t := spec.Task.Runtime.(type) {
+	case *swarmapi.TaskSpec_Container:
+		containerConfig := spec.Task.Runtime.(*swarmapi.TaskSpec_Container).Container
+		convertedSpec.TaskTemplate.ContainerSpec = containerSpecFromGRPC(containerConfig)
+	case *swarmapi.TaskSpec_Custom:
+		switch t.Custom.TypeUrl {
+		case string(types.RuntimePlugin):
+			convertedSpec.TaskTemplate.Runtime = types.RuntimePlugin
+		case string(types.RuntimeContainer):
+			convertedSpec.TaskTemplate.Runtime = types.RuntimeContainer
+		default:
+			return &types.ServiceSpec{}, fmt.Errorf("unknown task runtime type: %s", t.Custom.TypeUrl)
+		}
+
+		convertedSpec.TaskTemplate.RuntimeBlob = t.Custom.Value
+	default:
+		return &types.ServiceSpec{}, fmt.Errorf("error creating service; unsupported runtime %s", t)
+	}
 
 	// UpdateConfig
 	if spec.Update != nil {
@@ -158,11 +175,23 @@ func ServiceSpecToGRPC(s types.ServiceSpec) (swarmapi.ServiceSpec, error) {
 		Networks: serviceNetworks,
 	}
 
-	containerSpec, err := containerToGRPC(s.TaskTemplate.ContainerSpec)
-	if err != nil {
-		return swarmapi.ServiceSpec{}, err
+	switch s.TaskTemplate.Runtime {
+	case types.RuntimeContainer:
+		containerSpec, err := containerToGRPC(s.TaskTemplate.ContainerSpec)
+		if err != nil {
+			return swarmapi.ServiceSpec{}, err
+		}
+		spec.Task.Runtime = &swarmapi.TaskSpec_Container{Container: containerSpec}
+	case types.RuntimePlugin:
+		spec.Task.Runtime = &swarmapi.TaskSpec_Custom{
+			Custom: &gogotypes.Any{
+				TypeUrl: string(types.RuntimePlugin),
+				Value:   s.TaskTemplate.RuntimeBlob,
+			},
+		}
+	default:
+		return swarmapi.ServiceSpec{}, fmt.Errorf("error creating service; unsupported runtime %s", s.TaskTemplate.Runtime)
 	}
-	spec.Task.Runtime = &swarmapi.TaskSpec_Container{Container: containerSpec}
 
 	restartPolicy, err := restartPolicyToGRPC(s.TaskTemplate.RestartPolicy)
 	if err != nil {

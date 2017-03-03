@@ -48,5 +48,6 @@ func (sr *swarmRouter) initRoutes() {
 		router.NewDeleteRoute("/secrets/{id}", sr.removeSecret),
 		router.NewGetRoute("/secrets/{id}", sr.getSecret),
 		router.NewPostRoute("/secrets/{id}/update", sr.updateSecret),
+		router.NewPostRoute("/swarm/plugins/{name:.*}/enable", sr.enablePlugin),
 	}
 }

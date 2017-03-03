@@ -110,34 +110,37 @@ func (c *Cluster) CreateService(s types.ServiceSpec, encodedAuth string) (*apity
 
 	resp := &apitypes.ServiceCreateResponse{}
 
-	ctnr := serviceSpec.Task.GetContainer()
-	if ctnr == nil {
-		return nil, errors.New("service does not use container tasks")
-	}
-
-	if encodedAuth != "" {
-		ctnr.PullOptions = &swarmapi.ContainerSpec_PullOptions{RegistryAuth: encodedAuth}
-	}
-
-	// retrieve auth config from encoded auth
-	authConfig := &apitypes.AuthConfig{}
-	if encodedAuth != "" {
-		if err := json.NewDecoder(base64.NewDecoder(base64.URLEncoding, strings.NewReader(encodedAuth))).Decode(authConfig); err != nil {
-			logrus.Warnf("invalid authconfig: %v", err)
+	switch serviceSpec.Task.GetRuntime().(type) {
+	case *swarmapi.TaskSpec_Container:
+		ctnr := serviceSpec.Task.GetContainer()
+		if ctnr == nil {
+			return nil, errors.New("service does not use container tasks")
 		}
-	}
 
-	// pin image by digest
-	if os.Getenv("DOCKER_SERVICE_PREFER_OFFLINE_IMAGE") != "1" {
-		digestImage, err := c.imageWithDigestString(ctx, ctnr.Image, authConfig)
-		if err != nil {
-			logrus.Warnf("unable to pin image %s to digest: %s", ctnr.Image, err.Error())
-			resp.Warnings = append(resp.Warnings, fmt.Sprintf("unable to pin image %s to digest: %s", ctnr.Image, err.Error()))
-		} else if ctnr.Image != digestImage {
-			logrus.Debugf("pinning image %s by digest: %s", ctnr.Image, digestImage)
-			ctnr.Image = digestImage
-		} else {
-			logrus.Debugf("creating service using supplied digest reference %s", ctnr.Image)
+		if encodedAuth != "" {
+			ctnr.PullOptions = &swarmapi.ContainerSpec_PullOptions{RegistryAuth: encodedAuth}
+		}
+
+		// retrieve auth config from encoded auth
+		authConfig := &apitypes.AuthConfig{}
+		if encodedAuth != "" {
+			if err := json.NewDecoder(base64.NewDecoder(base64.URLEncoding, strings.NewReader(encodedAuth))).Decode(authConfig); err != nil {
+				logrus.Warnf("invalid authconfig: %v", err)
+			}
+		}
+
+		// pin image by digest
+		if os.Getenv("DOCKER_SERVICE_PREFER_OFFLINE_IMAGE") != "1" {
+			digestImage, err := c.imageWithDigestString(ctx, ctnr.Image, authConfig)
+			if err != nil {
+				logrus.Warnf("unable to pin image %s to digest: %s", ctnr.Image, err.Error())
+				resp.Warnings = append(resp.Warnings, fmt.Sprintf("unable to pin image %s to digest: %s", ctnr.Image, err.Error()))
+			} else if ctnr.Image != digestImage {
+				logrus.Debugf("pinning image %s by digest: %s", ctnr.Image, digestImage)
+				ctnr.Image = digestImage
+			} else {
+				logrus.Debugf("creating service using supplied digest reference %s", ctnr.Image)
+			}
 		}
 	}
 

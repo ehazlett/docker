@@ -423,3 +423,36 @@ func (sr *swarmRouter) updateSecret(ctx context.Context, w http.ResponseWriter, 
 
 	return nil
 }
+
+func (sr *swarmRouter) enablePlugin(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	// TODO: DRY out (createService)
+	name := vars["name"]
+	opts := basictypes.Plugin{
+		Name:    "vieux/sshfs",
+		Enabled: true,
+	}
+	data, err := json.Marshal(opts)
+	if err != nil {
+		return err
+	}
+	spec := types.ServiceSpec{
+		Annotations: types.Annotations{
+			Name: name,
+		},
+		TaskTemplate: types.TaskSpec{
+			Runtime:     types.RuntimePlugin,
+			RuntimeBlob: data,
+		},
+	}
+
+	// Get returns "" if the header does not exist
+	encodedAuth := r.Header.Get("X-Registry-Auth")
+
+	resp, err := sr.backend.CreateService(spec, encodedAuth)
+	if err != nil {
+		logrus.Errorf("Error creating plugin %s: %v", spec.Name, err)
+		return err
+	}
+
+	return httputils.WriteJSON(w, http.StatusCreated, resp)
+}
