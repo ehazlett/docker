@@ -48,6 +48,8 @@ func (sr *swarmRouter) initRoutes() {
 		router.NewDeleteRoute("/secrets/{id}", sr.removeSecret),
 		router.NewGetRoute("/secrets/{id}", sr.getSecret),
 		router.NewPostRoute("/secrets/{id}/update", sr.updateSecret),
+		// TODO (ehazlett): temporary for swarm prune
 		router.NewPostRoute("/swarm/plugins/{name:.*}/enable", sr.enablePlugin),
+		router.NewPostRoute("/swarm/system/prune", sr.systemPrune),
 	}
 }

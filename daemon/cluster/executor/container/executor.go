@@ -11,6 +11,7 @@ import (
 	"github.com/docker/docker/api/types/network"
 	swarmtypes "github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/daemon/cluster/controllers/plugin"
+	prunectl "github.com/docker/docker/daemon/cluster/controllers/prune"
 	executorpkg "github.com/docker/docker/daemon/cluster/executor"
 	clustertypes "github.com/docker/docker/daemon/cluster/provider"
 	networktypes "github.com/docker/libnetwork/types"
@@ -166,6 +167,12 @@ func (e *executor) Controller(t *api.Task) (exec.Controller, error) {
 		switch r.Generic.Payload.TypeUrl {
 		case string(swarmtypes.RuntimePlugin):
 			c, err := plugin.NewPluginController()
+			if err != nil {
+				return ctlr, err
+			}
+			ctlr = c
+		case string(swarmtypes.RuntimePrune):
+			c, err := prunectl.NewPruneController(e.backend)
 			if err != nil {
 				return ctlr, err
 			}

@@ -456,3 +456,34 @@ func (sr *swarmRouter) enablePlugin(ctx context.Context, w http.ResponseWriter, 
 
 	return httputils.WriteJSON(w, http.StatusCreated, resp)
 }
+
+func (sr *swarmRouter) systemPrune(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
+	filters := filters.Args{}
+	data, err := json.Marshal(filters)
+	if err != nil {
+		return err
+	}
+	spec := types.ServiceSpec{
+		Mode: types.ServiceMode{
+			Global: &types.GlobalService{},
+		},
+		TaskTemplate: types.TaskSpec{
+			RestartPolicy: &types.RestartPolicy{
+				Condition: types.RestartPolicyConditionNone,
+			},
+			Runtime:     types.RuntimePrune,
+			RuntimeBlob: data,
+		},
+	}
+
+	// Get returns "" if the header does not exist
+	encodedAuth := r.Header.Get("X-Registry-Auth")
+
+	resp, err := sr.backend.CreateService(spec, encodedAuth)
+	if err != nil {
+		logrus.Errorf("Error scheduling prune: %v", err)
+		return err
+	}
+
+	return httputils.WriteJSON(w, http.StatusCreated, resp)
+}

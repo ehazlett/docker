@@ -58,4 +58,5 @@ type Backend interface {
 	LookupImage(name string) (*types.ImageInspect, error)
 	PluginManager() *plugin.Manager
 	PluginGetter() *plugin.Store
+	ContainersPrune(pruneFilters filters.Args) (*types.ContainersPruneReport, error)
 }

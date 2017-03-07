@@ -102,6 +102,8 @@ func serviceSpecFromGRPC(spec *swarmapi.ServiceSpec) (*types.ServiceSpec, error)
 			convertedSpec.TaskTemplate.Runtime = types.RuntimePlugin
 		case string(types.RuntimeContainer):
 			convertedSpec.TaskTemplate.Runtime = types.RuntimeContainer
+		case string(types.RuntimePrune):
+			convertedSpec.TaskTemplate.Runtime = types.RuntimePrune
 		default:
 			return &types.ServiceSpec{}, fmt.Errorf("unknown task runtime type: %s", t.Generic.Payload.TypeUrl)
 		}
@@ -190,6 +192,13 @@ func ServiceSpecToGRPC(s types.ServiceSpec) (swarmapi.ServiceSpec, error) {
 					TypeUrl: string(types.RuntimePlugin),
 					Value:   s.TaskTemplate.RuntimeBlob,
 				},
+			},
+		}
+	case types.RuntimePrune:
+		spec.Task.Runtime = &swarmapi.TaskSpec_Custom{
+			Custom: &gogotypes.Any{
+				TypeUrl: string(types.RuntimePrune),
+				Value:   s.TaskTemplate.RuntimeBlob,
 			},
 		}
 	default:
