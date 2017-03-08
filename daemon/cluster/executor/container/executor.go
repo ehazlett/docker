@@ -172,7 +172,7 @@ func (e *executor) Controller(t *api.Task) (exec.Controller, error) {
 			}
 			ctlr = c
 		case string(swarmtypes.RuntimePrune):
-			c, err := prunectl.NewPruneController(e.backend)
+			c, err := prunectl.NewPruneController(e.backend, t)
 			if err != nil {
 				return ctlr, err
 			}

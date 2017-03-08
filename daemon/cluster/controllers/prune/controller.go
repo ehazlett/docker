@@ -1,6 +1,7 @@
 package prune
 
 import (
+	"encoding/json"
 	"fmt"
 
 	"github.com/Sirupsen/logrus"
@@ -12,12 +13,13 @@ import (
 
 type pruneController struct {
 	backend executorpkg.Backend
+	task    *api.Task
 }
 
-func NewPruneController(b executorpkg.Backend) (*pruneController, error) {
+func NewPruneController(b executorpkg.Backend, task *api.Task) (*pruneController, error) {
 	return &pruneController{
-		backend:  b,
-		waitChan: make(chan struct{}),
+		backend: b,
+		task:    task,
 	}, nil
 }
 
@@ -25,6 +27,7 @@ func (p *pruneController) Update(ctx context.Context, t *api.Task) error {
 	logrus.WithFields(logrus.Fields{
 		"controller": "prune",
 	}).Debug("Update")
+
 	return nil
 }
 
@@ -40,8 +43,22 @@ func (p *pruneController) Start(ctx context.Context) error {
 		"controller": "prune",
 	}).Debug("Start")
 
-	f := filters.Args{}
-	resp, err := p.backend.ContainersPrune(f)
+	f := &filters.Args{}
+	r := p.task.Spec.GetRuntime()
+
+	val := r.(*api.TaskSpec_Custom).Custom.Value
+	if err := json.Unmarshal(val, &f); err != nil {
+		return err
+	}
+
+	logrus.Debugf("VALUE: %s", val)
+
+	logrus.WithFields(logrus.Fields{
+		"controller": "prune",
+		"args":       f,
+	}).Debug("prune args from runtime")
+
+	resp, err := p.backend.ContainersPrune(filters.Args{})
 	if err != nil {
 		return err
 	}

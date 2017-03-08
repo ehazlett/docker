@@ -458,8 +458,10 @@ func (sr *swarmRouter) enablePlugin(ctx context.Context, w http.ResponseWriter, 
 }
 
 func (sr *swarmRouter) systemPrune(ctx context.Context, w http.ResponseWriter, r *http.Request, vars map[string]string) error {
-	filters := filters.Args{}
-	data, err := json.Marshal(filters)
+	// TODO: change this to PruneOptions?
+	f := filters.NewArgs()
+	f.Add("name", "test-*")
+	data, err := json.Marshal(f)
 	if err != nil {
 		return err
 	}
