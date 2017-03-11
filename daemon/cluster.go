@@ -1,8 +1,6 @@
 package daemon
 
-import (
-	apitypes "github.com/docker/docker/api/types"
-)
+import apitypes "github.com/docker/docker/api/types"
 
 // Cluster is the interface for github.com/docker/docker/daemon/cluster.(*Cluster).
 type Cluster interface {

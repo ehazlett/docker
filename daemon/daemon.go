@@ -450,6 +450,7 @@ func (daemon *Daemon) DaemonLeavesCluster() {
 
 // setClusterProvider sets a component for querying the current cluster state.
 func (daemon *Daemon) setClusterProvider(clusterProvider cluster.Provider) {
+	logrus.Debug("setting cluster provider")
 	daemon.clusterProvider = clusterProvider
 	daemon.netController.SetClusterProvider(clusterProvider)
 }

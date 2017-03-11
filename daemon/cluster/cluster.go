@@ -48,8 +48,9 @@ import (
 	"time"
 
 	"github.com/Sirupsen/logrus"
+	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/network"
-	types "github.com/docker/docker/api/types/swarm"
+	swarmtypes "github.com/docker/docker/api/types/swarm"
 	executorpkg "github.com/docker/docker/daemon/cluster/executor"
 	"github.com/docker/docker/pkg/signal"
 	swarmapi "github.com/docker/swarmkit/api"
@@ -85,6 +86,9 @@ var errSwarmLocked = errors.New("Swarm is encrypted and needs to be unlocked bef
 
 // errSwarmCertificatesExpired is returned if docker was not started for the whole validity period and they had no chance to renew automatically.
 var errSwarmCertificatesExpired = errors.New("Swarm certificates have expired. To replace them, leave the swarm and join again.")
+
+// errLocalStateExists is returned if swarm has state (services, secrets, etc).  --force must be removed as existing content will be removed
+var errLocalStateExists = errors.New("Local Swarm has state.  Please use --force if you want to remove existing content.")
 
 // NetworkSubnetsProvider exposes functions for retrieving the subnets
 // of networks managed by Docker, so they can be filtered.
@@ -152,24 +156,31 @@ func New(config Config) (*Cluster, error) {
 		attachers:   make(map[string]*attacher),
 	}
 
-	nodeConfig, err := loadPersistentState(root)
+	nodeConfig, err := loadPersistentState(c.root)
 	if err != nil {
-		if os.IsNotExist(err) {
-			return c, nil
+		if !os.IsNotExist(err) {
+			return nil, err
 		}
-		return nil, err
+
+		// initialize local by default
+		cfg := &nodeStartConfig{
+			LocalAddr:     "127.0.0.1",
+			RemoteAddr:    "127.0.0.1",
+			ListenAddr:    "",
+			AdvertiseAddr: "",
+		}
+
+		nodeConfig = cfg
 	}
 
-	nr, err := c.newNodeRunner(*nodeConfig)
-	if err != nil {
+	if err := c.initialize(nodeConfig); err != nil {
 		return nil, err
 	}
-	c.nr = nr
 
 	select {
 	case <-time.After(swarmConnectTimeout):
 		logrus.Error("swarm component could not be started before timeout was reached")
-	case err := <-nr.Ready():
+	case err := <-c.nr.Ready():
 		if err != nil {
 			if errors.Cause(err) == errSwarmLocked {
 				return c, nil
@@ -180,7 +191,85 @@ func New(config Config) (*Cluster, error) {
 			return nil, errors.Wrap(err, "swarm component could not be started")
 		}
 	}
+
 	return c, nil
+}
+
+func (c *Cluster) isLocal() bool {
+	return c.nr.config.LocalAddr == "127.0.0.1" && c.nr.config.ListenAddr == ""
+}
+
+func (c *Cluster) hasLocalState() (bool, error) {
+	svc, err := c.GetServices(types.ServiceListOptions{})
+	if err != nil {
+		return false, err
+	}
+	if len(svc) > 0 {
+		return true, nil
+	}
+
+	sec, err := c.GetSecrets(types.SecretListOptions{})
+	if err != nil {
+		return false, err
+	}
+	if len(sec) > 0 {
+		return true, nil
+	}
+
+	return false, nil
+}
+
+func (c *Cluster) initialize(cfg *nodeStartConfig) error {
+	logrus.Debugf("nodeStartConfig: %+v", *cfg)
+	nr, err := c.newNodeRunner(*cfg)
+	if err != nil {
+		return err
+	}
+	// TODO (ehazlett): take c.mu.Lock() ?
+	c.nr = nr
+	if err := <-nr.Ready(); err != nil {
+		// if failure on first attempt don't keep state
+		if err := clearPersistentState(c.root); err != nil {
+			return err
+		}
+		if err != nil {
+			c.mu.Lock()
+			c.nr = nil
+			c.mu.Unlock()
+		}
+		return err
+	}
+	state := nr.State()
+	if state.swarmNode == nil { // should never happen but protect from panic
+		return errors.New("invalid cluster state for spec initialization")
+	}
+
+	taskLimit := int64(5)
+	snapshots := uint64(0)
+	spec := swarmtypes.Spec{
+		Orchestration: swarmtypes.OrchestrationConfig{
+			TaskHistoryRetentionLimit: &taskLimit,
+		},
+		Dispatcher: swarmtypes.DispatcherConfig{
+			HeartbeatPeriod: 5 * time.Second,
+		},
+		CAConfig: swarmtypes.CAConfig{
+			NodeCertExpiry: 90 * 24 * time.Hour,
+		},
+		Raft: swarmtypes.RaftConfig{
+			KeepOldSnapshots: &snapshots,
+			SnapshotInterval: 10000,
+		},
+		EncryptionConfig: swarmtypes.EncryptionConfig{
+			AutoLockManagers: false,
+		},
+	}
+
+	if err := initClusterSpec(state.swarmNode, spec); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (c *Cluster) newNodeRunner(conf nodeStartConfig) (*nodeRunner, error) {
@@ -244,7 +333,7 @@ func (c *Cluster) IsManager() bool {
 func (c *Cluster) IsAgent() bool {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
-	return c.currentNodeState().status == types.LocalNodeStateActive
+	return c.currentNodeState().status == swarmtypes.LocalNodeStateActive
 }
 
 // GetLocalAddress returns the local address.

@@ -23,18 +23,28 @@ import (
 
 // Init initializes new cluster from user provided request.
 func (c *Cluster) Init(req types.InitRequest) (string, error) {
+	// if local force remove existing cluster
+	if c.isLocal() {
+		if err := c.Leave(true); err != nil {
+			return "", err
+		}
+	}
+
 	c.controlMutex.Lock()
 	defer c.controlMutex.Unlock()
+
 	c.mu.Lock()
 	if c.nr != nil {
-		if req.ForceNewCluster {
+		if req.ForceNewCluster || c.isLocal() {
 			if err := c.nr.Stop(); err != nil {
 				c.mu.Unlock()
 				return "", err
 			}
 		} else {
-			c.mu.Unlock()
-			return "", errSwarmExists
+			if !c.isLocal() {
+				c.mu.Unlock()
+				return "", errSwarmExists
+			}
 		}
 	}
 	c.mu.Unlock()
@@ -86,41 +96,26 @@ func (c *Cluster) Init(req types.InitRequest) (string, error) {
 		clearPersistentState(c.root)
 	}
 
-	nr, err := c.newNodeRunner(nodeStartConfig{
+	cfg := &nodeStartConfig{
 		forceNewCluster: req.ForceNewCluster,
 		autolock:        req.AutoLockManagers,
 		LocalAddr:       localAddr,
 		ListenAddr:      net.JoinHostPort(listenHost, listenPort),
 		AdvertiseAddr:   net.JoinHostPort(advertiseHost, advertisePort),
 		availability:    req.Availability,
-	})
-	if err != nil {
+	}
+	if err := c.initialize(cfg); err != nil {
 		return "", err
 	}
-	c.mu.Lock()
-	c.nr = nr
-	c.mu.Unlock()
 
-	if err := <-nr.Ready(); err != nil {
-		if !req.ForceNewCluster { // if failure on first attempt don't keep state
-			if err := clearPersistentState(c.root); err != nil {
-				return "", err
-			}
-		}
-		if err != nil {
-			c.mu.Lock()
-			c.nr = nil
-			c.mu.Unlock()
-		}
-		return "", err
-	}
-	state := nr.State()
+	state := c.nr.State()
 	if state.swarmNode == nil { // should never happen but protect from panic
 		return "", errors.New("invalid cluster state for spec initialization")
 	}
 	if err := initClusterSpec(state.swarmNode, req.Spec); err != nil {
 		return "", err
 	}
+
 	return state.NodeID(), nil
 }
 
@@ -128,10 +123,23 @@ func (c *Cluster) Init(req types.InitRequest) (string, error) {
 func (c *Cluster) Join(req types.JoinRequest) error {
 	c.controlMutex.Lock()
 	defer c.controlMutex.Unlock()
+
+	hasState, err := c.hasLocalState()
+	if err != nil {
+		return err
+	}
+
 	c.mu.Lock()
 	if c.nr != nil {
-		c.mu.Unlock()
-		return errSwarmExists
+		if !c.isLocal() {
+			c.mu.Unlock()
+			return errSwarmExists
+		}
+
+		if hasState {
+			c.mu.Unlock()
+			return errLocalStateExists
+		}
 	}
 	c.mu.Unlock()
 
@@ -156,26 +164,22 @@ func (c *Cluster) Join(req types.JoinRequest) error {
 
 	clearPersistentState(c.root)
 
-	nr, err := c.newNodeRunner(nodeStartConfig{
+	cfg := &nodeStartConfig{
 		RemoteAddr:    req.RemoteAddrs[0],
 		ListenAddr:    net.JoinHostPort(listenHost, listenPort),
 		AdvertiseAddr: advertiseAddr,
 		joinAddr:      req.RemoteAddrs[0],
 		joinToken:     req.JoinToken,
 		availability:  req.Availability,
-	})
-	if err != nil {
+	}
+	if err := c.initialize(cfg); err != nil {
 		return err
 	}
-
-	c.mu.Lock()
-	c.nr = nr
-	c.mu.Unlock()
 
 	select {
 	case <-time.After(swarmConnectTimeout):
 		return errSwarmJoinTimeoutReached
-	case err := <-nr.Ready():
+	case err := <-c.nr.Ready():
 		if err != nil {
 			c.mu.Lock()
 			c.nr = nil
@@ -380,6 +384,19 @@ func (c *Cluster) Leave(force bool) error {
 		return err
 	}
 	c.config.Backend.DaemonLeavesCluster()
+
+	// re-initialize local
+	cfg := &nodeStartConfig{
+		LocalAddr:     "127.0.0.1",
+		RemoteAddr:    "127.0.0.1",
+		ListenAddr:    "",
+		AdvertiseAddr: "",
+	}
+
+	if err := c.initialize(cfg); err != nil {
+		return err
+	}
+
 	return nil
 }
 
