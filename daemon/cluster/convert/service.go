@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/Sirupsen/logrus"
 	types "github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/pkg/namesgenerator"
 	swarmapi "github.com/docker/swarmkit/api"
@@ -105,7 +106,7 @@ func serviceSpecFromGRPC(spec *swarmapi.ServiceSpec) (*types.ServiceSpec, error)
 		case string(types.RuntimePrune):
 			convertedSpec.TaskTemplate.Runtime = types.RuntimePrune
 		default:
-			return &types.ServiceSpec{}, fmt.Errorf("unknown task runtime type: %s", t.Generic.Payload.TypeUrl)
+			return &types.ServiceSpec{}, fmt.Errorf("unknown task runtime: %s", t.Generic.Payload.TypeUrl)
 		}
 
 		convertedSpec.TaskTemplate.RuntimeBlob = t.Generic.Payload.Value
@@ -177,6 +178,8 @@ func ServiceSpecToGRPC(s types.ServiceSpec) (swarmapi.ServiceSpec, error) {
 		Networks: serviceNetworks,
 	}
 
+	pluginKind := ""
+
 	switch s.TaskTemplate.Runtime {
 	case types.RuntimeContainer:
 		containerSpec, err := containerToGRPC(s.TaskTemplate.ContainerSpec)
@@ -185,24 +188,22 @@ func ServiceSpecToGRPC(s types.ServiceSpec) (swarmapi.ServiceSpec, error) {
 		}
 		spec.Task.Runtime = &swarmapi.TaskSpec_Container{Container: containerSpec}
 	case types.RuntimePlugin:
-		spec.Task.Runtime = &swarmapi.TaskSpec_Generic{
-			Generic: &swarmapi.GenericRuntimeSpec{
-				Kind: string(types.RuntimePlugin),
-				Payload: &gogotypes.Any{
-					TypeUrl: string(types.RuntimePlugin),
-					Value:   s.TaskTemplate.RuntimeBlob,
-				},
-			},
-		}
+		pluginKind = string(types.RuntimePlugin)
 	case types.RuntimePrune:
-		spec.Task.Runtime = &swarmapi.TaskSpec_Custom{
-			Custom: &gogotypes.Any{
-				TypeUrl: string(types.RuntimePrune),
-				Value:   s.TaskTemplate.RuntimeBlob,
-			},
-		}
+		pluginKind = string(types.RuntimePrune)
 	default:
 		return swarmapi.ServiceSpec{}, fmt.Errorf("error creating service; unsupported runtime %s", s.TaskTemplate.Runtime)
+	}
+
+	logrus.Debugf("BLOB: %+v", string(s.TaskTemplate.RuntimeBlob))
+	spec.Task.Runtime = &swarmapi.TaskSpec_Generic{
+		Generic: &swarmapi.GenericRuntimeSpec{
+			Kind: pluginKind,
+			Payload: &gogotypes.Any{
+				TypeUrl: pluginKind,
+				Value:   s.TaskTemplate.RuntimeBlob,
+			},
+		},
 	}
 
 	restartPolicy, err := restartPolicyToGRPC(s.TaskTemplate.RestartPolicy)

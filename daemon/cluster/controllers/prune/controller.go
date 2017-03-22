@@ -1,7 +1,6 @@
 package prune
 
 import (
-	"encoding/json"
 	"fmt"
 
 	"github.com/Sirupsen/logrus"
@@ -43,22 +42,9 @@ func (p *pruneController) Start(ctx context.Context) error {
 		"controller": "prune",
 	}).Debug("Start")
 
-	f := &filters.Args{}
+	f := filters.NewArgs()
 	r := p.task.Spec.GetRuntime()
-
-	val := r.(*api.TaskSpec_Custom).Custom.Value
-	if err := json.Unmarshal(val, &f); err != nil {
-		return err
-	}
-
-	logrus.Debugf("VALUE: %s", val)
-
-	logrus.WithFields(logrus.Fields{
-		"controller": "prune",
-		"args":       f,
-	}).Debug("prune args from runtime")
-
-	resp, err := p.backend.ContainersPrune(filters.Args{})
+	resp, err := p.backend.ContainersPrune(f)
 	if err != nil {
 		return err
 	}
