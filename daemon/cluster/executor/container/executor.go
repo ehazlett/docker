@@ -158,12 +158,12 @@ func (e *executor) Controller(t *api.Task) (exec.Controller, error) {
 
 	var ctlr exec.Controller
 	switch r := t.Spec.GetRuntime().(type) {
-	case *api.TaskSpec_Custom:
+	case *api.TaskSpec_Generic:
 		// TODO: Custom controllers
 		logrus.WithFields(logrus.Fields{
-			"runtimeUrl": r.Custom.TypeUrl,
+			"runtimeUrl": r.Generic.Payload.TypeUrl,
 		}).Debug("custom runtime requested")
-		switch r.Custom.TypeUrl {
+		switch r.Generic.Payload.TypeUrl {
 		case string(swarmtypes.RuntimePlugin):
 			c, err := plugin.NewPluginController()
 			if err != nil {

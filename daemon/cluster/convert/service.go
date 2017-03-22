@@ -96,17 +96,17 @@ func serviceSpecFromGRPC(spec *swarmapi.ServiceSpec) (*types.ServiceSpec, error)
 	case *swarmapi.TaskSpec_Container:
 		containerConfig := spec.Task.Runtime.(*swarmapi.TaskSpec_Container).Container
 		convertedSpec.TaskTemplate.ContainerSpec = containerSpecFromGRPC(containerConfig)
-	case *swarmapi.TaskSpec_Custom:
-		switch t.Custom.TypeUrl {
+	case *swarmapi.TaskSpec_Generic:
+		switch t.Generic.Payload.TypeUrl {
 		case string(types.RuntimePlugin):
 			convertedSpec.TaskTemplate.Runtime = types.RuntimePlugin
 		case string(types.RuntimeContainer):
 			convertedSpec.TaskTemplate.Runtime = types.RuntimeContainer
 		default:
-			return &types.ServiceSpec{}, fmt.Errorf("unknown task runtime type: %s", t.Custom.TypeUrl)
+			return &types.ServiceSpec{}, fmt.Errorf("unknown task runtime type: %s", t.Generic.Payload.TypeUrl)
 		}
 
-		convertedSpec.TaskTemplate.RuntimeBlob = t.Custom.Value
+		convertedSpec.TaskTemplate.RuntimeBlob = t.Generic.Payload.Value
 	default:
 		return &types.ServiceSpec{}, fmt.Errorf("error creating service; unsupported runtime %s", t)
 	}
@@ -183,10 +183,13 @@ func ServiceSpecToGRPC(s types.ServiceSpec) (swarmapi.ServiceSpec, error) {
 		}
 		spec.Task.Runtime = &swarmapi.TaskSpec_Container{Container: containerSpec}
 	case types.RuntimePlugin:
-		spec.Task.Runtime = &swarmapi.TaskSpec_Custom{
-			Custom: &gogotypes.Any{
-				TypeUrl: string(types.RuntimePlugin),
-				Value:   s.TaskTemplate.RuntimeBlob,
+		spec.Task.Runtime = &swarmapi.TaskSpec_Generic{
+			Generic: &swarmapi.GenericRuntimeSpec{
+				Kind: string(types.RuntimePlugin),
+				Payload: &gogotypes.Any{
+					TypeUrl: string(types.RuntimePlugin),
+					Value:   s.TaskTemplate.RuntimeBlob,
+				},
 			},
 		}
 	default:
