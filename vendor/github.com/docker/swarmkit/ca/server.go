@@ -109,9 +109,9 @@ func (s *Server) NodeCertificateStatus(ctx context.Context, request *api.NodeCer
 
 	var node *api.Node
 
-	event := state.EventUpdateNode{
+	event := api.EventUpdateNode{
 		Node:   &api.Node{ID: request.NodeID},
-		Checks: []state.NodeCheckFunc{state.NodeCheckID},
+		Checks: []api.NodeCheckFunc{state.NodeCheckID},
 	}
 
 	// Retrieve the current value of the certificate with this token, and create a watcher
@@ -158,7 +158,7 @@ func (s *Server) NodeCertificateStatus(ctx context.Context, request *api.NodeCer
 		select {
 		case event := <-updates:
 			switch v := event.(type) {
-			case state.EventUpdateNode:
+			case api.EventUpdateNode:
 				// We got an update on the certificate record. If the status is a final state,
 				// return the certificate.
 				if isFinalState(v.Node.Certificate.Status) {
@@ -361,7 +361,7 @@ func (s *Server) GetRootCACertificate(ctx context.Context, request *api.GetRootC
 	})
 
 	return &api.GetRootCACertificateResponse{
-		Certificate: s.securityConfig.RootCA().Cert,
+		Certificate: s.securityConfig.RootCA().Certs,
 	}, nil
 }
 
@@ -392,14 +392,12 @@ func (s *Server) Run(ctx context.Context) error {
 			if len(clusters) != 1 {
 				return errors.New("could not find cluster object")
 			}
-			s.updateCluster(ctx, clusters[0])
-
+			s.UpdateRootCA(ctx, clusters[0]) // call once to ensure that the join tokens are always set
 			nodes, err = store.FindNodes(readTx, store.All)
 			return err
 		},
-		state.EventCreateNode{},
-		state.EventUpdateNode{},
-		state.EventUpdateCluster{},
+		api.EventCreateNode{},
+		api.EventUpdateNode{},
 	)
 
 	// Do this after updateCluster has been called, so isRunning never
@@ -435,18 +433,22 @@ func (s *Server) Run(ctx context.Context) error {
 	// to the cluster
 	for {
 		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+
+		select {
 		case event := <-updates:
 			switch v := event.(type) {
-			case state.EventCreateNode:
+			case api.EventCreateNode:
 				s.evaluateAndSignNodeCert(ctx, v.Node)
-			case state.EventUpdateNode:
+			case api.EventUpdateNode:
 				// If this certificate is already at a final state
 				// no need to evaluate and sign it.
 				if !isFinalState(v.Node.Certificate.Status) {
 					s.evaluateAndSignNodeCert(ctx, v.Node)
 				}
-			case state.EventUpdateCluster:
-				s.updateCluster(ctx, v.Cluster)
 			}
 		case <-ticker.C:
 			for _, node := range s.pending {
@@ -512,9 +514,10 @@ func (s *Server) isRunning() bool {
 	return true
 }
 
-// updateCluster is called when there are cluster changes, and it ensures that the local RootCA is
-// always aware of changes in clusterExpiry and the Root CA key material
-func (s *Server) updateCluster(ctx context.Context, cluster *api.Cluster) {
+// UpdateRootCA is called when there are cluster changes, and it ensures that the local RootCA is
+// always aware of changes in clusterExpiry and the Root CA key material - this can be called by
+// anything to update the root CA material
+func (s *Server) UpdateRootCA(ctx context.Context, cluster *api.Cluster) {
 	s.mu.Lock()
 	s.joinTokens = cluster.RootCA.JoinTokens.Copy()
 	s.mu.Unlock()

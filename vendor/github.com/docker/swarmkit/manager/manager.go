@@ -19,6 +19,7 @@ import (
 	"github.com/docker/swarmkit/api"
 	"github.com/docker/swarmkit/ca"
 	"github.com/docker/swarmkit/connectionbroker"
+	"github.com/docker/swarmkit/identity"
 	"github.com/docker/swarmkit/log"
 	"github.com/docker/swarmkit/manager/allocator"
 	"github.com/docker/swarmkit/manager/controlapi"
@@ -514,7 +515,7 @@ func (m *Manager) Run(parent context.Context) error {
 	}
 	raftConfig := c.Spec.Raft
 
-	if err := m.watchForKEKChanges(ctx); err != nil {
+	if err := m.watchForClusterChanges(ctx); err != nil {
 		return err
 	}
 
@@ -679,7 +680,7 @@ func (m *Manager) updateKEK(ctx context.Context, cluster *api.Cluster) error {
 	return nil
 }
 
-func (m *Manager) watchForKEKChanges(ctx context.Context) error {
+func (m *Manager) watchForClusterChanges(ctx context.Context) error {
 	clusterID := m.config.SecurityConfig.ClientTLSCreds.Organization()
 	clusterWatch, clusterWatchCancel, err := store.ViewAndWatch(m.raftNode.MemoryStore(),
 		func(tx store.ReadTx) error {
@@ -687,11 +688,12 @@ func (m *Manager) watchForKEKChanges(ctx context.Context) error {
 			if cluster == nil {
 				return fmt.Errorf("unable to get current cluster")
 			}
+			m.caserver.UpdateRootCA(ctx, cluster)
 			return m.updateKEK(ctx, cluster)
 		},
-		state.EventUpdateCluster{
+		api.EventUpdateCluster{
 			Cluster: &api.Cluster{ID: clusterID},
-			Checks:  []state.ClusterCheckFunc{state.ClusterCheckID},
+			Checks:  []api.ClusterCheckFunc{state.ClusterCheckID},
 		},
 	)
 	if err != nil {
@@ -701,7 +703,8 @@ func (m *Manager) watchForKEKChanges(ctx context.Context) error {
 		for {
 			select {
 			case event := <-clusterWatch:
-				clusterEvent := event.(state.EventUpdateCluster)
+				clusterEvent := event.(api.EventUpdateCluster)
+				m.caserver.UpdateRootCA(ctx, clusterEvent.Cluster)
 				m.updateKEK(ctx, clusterEvent.Cluster)
 			case <-ctx.Done():
 				clusterWatchCancel()
@@ -890,7 +893,18 @@ func (m *Manager) becomeLeader(ctx context.Context) {
 			rootCA))
 		// Add Node entry for ourself, if one
 		// doesn't exist already.
-		store.CreateNode(tx, managerNode(nodeID, m.config.Availability))
+		freshCluster := nil == store.CreateNode(tx, managerNode(nodeID, m.config.Availability))
+
+		if freshCluster {
+			// This is a fresh swarm cluster. Add to store now any initial
+			// cluster resource, like the default ingress network which
+			// provides the routing mesh for this cluster.
+			log.G(ctx).Info("Creating default ingress network")
+			if err := store.CreateNetwork(tx, newIngressNetwork()); err != nil {
+				log.G(ctx).WithError(err).Error("failed to create default ingress network")
+			}
+		}
+
 		return nil
 	})
 
@@ -983,7 +997,7 @@ func (m *Manager) becomeLeader(ctx context.Context) {
 	}(m.globalOrchestrator)
 
 	go func(roleManager *roleManager) {
-		roleManager.Run()
+		roleManager.Run(ctx)
 	}(m.roleManager)
 }
 
@@ -1030,6 +1044,10 @@ func defaultClusterObject(
 	encryptionConfig api.EncryptionConfig,
 	initialUnlockKeys []*api.EncryptionKey,
 	rootCA *ca.RootCA) *api.Cluster {
+	var caKey []byte
+	if rcaSigner, err := rootCA.Signer(); err == nil {
+		caKey = rcaSigner.Key
+	}
 
 	return &api.Cluster{
 		ID: clusterID,
@@ -1048,8 +1066,8 @@ func defaultClusterObject(
 			EncryptionConfig: encryptionConfig,
 		},
 		RootCA: api.RootCA{
-			CAKey:      rootCA.Key,
-			CACert:     rootCA.Cert,
+			CAKey:      caKey,
+			CACert:     rootCA.Certs,
 			CACertHash: rootCA.Digest.String(),
 			JoinTokens: api.JoinTokens{
 				Worker:  ca.GenerateJoinToken(rootCA),
@@ -1075,6 +1093,31 @@ func managerNode(nodeID string, availability api.NodeSpec_Availability) *api.Nod
 			DesiredRole:  api.NodeRoleManager,
 			Membership:   api.NodeMembershipAccepted,
 			Availability: availability,
+		},
+	}
+}
+
+// newIngressNetwork returns the network object for the default ingress
+// network, the network which provides the routing mesh. Caller will save to
+// store this object once, at fresh cluster creation. It is expected to
+// call this function inside a store update transaction.
+func newIngressNetwork() *api.Network {
+	return &api.Network{
+		ID: identity.NewID(),
+		Spec: api.NetworkSpec{
+			Ingress: true,
+			Annotations: api.Annotations{
+				Name: "ingress",
+			},
+			DriverConfig: &api.Driver{},
+			IPAM: &api.IPAMOptions{
+				Driver: &api.Driver{},
+				Configs: []*api.IPAMConfig{
+					{
+						Subnet: "10.255.0.0/16",
+					},
+				},
+			},
 		},
 	}
 }
